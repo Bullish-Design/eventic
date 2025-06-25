@@ -2,6 +2,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.devenv*
+devenv.nix
+devenv.lock
+devenv.yaml
+.tmuxp.yaml
+.envrc
+.python-version
+
 
 # C extensions
 *.so
@@ -191,4 +199,12 @@ cython_debug/
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
-.cursorindexingignore
+.cursorindexingignore# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
