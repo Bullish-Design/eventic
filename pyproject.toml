@@ -1,7 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
 [project]
 name = "eventic"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.5"
+description = "DBOS backed event based pydantic models."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+license = { file = "LICENSE" }
+dependencies = [
+    "confidantic",
+    "dbos>=1.5.0",
+    "psycopg2-binary>=2.9.10",
+    "python-dotenv>=1.1.1",
+]
+
+[project.scripts]
+eventic-example = "examples.verify_eventic:main"
+
+[tool.uv.sources]
+confidantic = { git = "https://github.com/Bullish-Design/confidantic.git" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eventic", "src/examples"]
+
+#[tool.hatch.build.targets.sdist]
+#include = ["src/examples/**"]
