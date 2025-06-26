@@ -12,7 +12,7 @@ from pprint import pprint
 
 from fastapi import FastAPI
 from sqlalchemy import create_engine
-from dbos import DBOS, DBOSConfig, Queue
+# from dbos import DBOS, DBOSConfig, Queue
 
 from eventic import PropertiesBase, Record, Eventic
 # from eventic.runtime import Eventic
@@ -38,20 +38,8 @@ db_url = (
 
 print(f"\nConnecting to Postgres at {db_url}\n")
 
-# app = FastAPI()
 
 app = Eventic.create_app("eventic-demo", db_url=db_url)
-
-# dbos_conf: DBOSConfig = {
-#    "name": "eventic-demo",
-#    "database_url": db_url,
-# }
-
-# DBOS(config=dbos_conf, fastapi=app)
-
-# ────────────────────────────────── 2. Eventic bootstrap ───────────────────────────────
-# engine = create_engine(db_url, pool_pre_ping=True, future=True)
-# init_eventic(engine)  # Injects RecordStore + creates `records` table if absent
 
 
 # ────────────────────────────────── 3. Concrete Record ─────────────────────────────────
@@ -61,7 +49,7 @@ class Story(Record):
 
 
 # Access the auto-generated queue (defined by RecordMeta → queue_story)
-story_queue = Queue(Story._queue_name)  # type: ignore[attr-defined]
+story_queue = Eventic.queue(Story._queue_name)  # type: ignore[attr-defined]
 
 
 # ────────────────────────────────── 4. DBOS steps ──────────────────────────────────────
@@ -70,7 +58,6 @@ def create_story() -> uuid.UUID:
     s0 = Story()  # version 0
     print(f"\n→ Created Story v{s0.version} / id={s0.id} / version_id={s0.version_id}")
     Story._store.append(s0)
-    # DBOS.sql_session.execute(Record._store.append(s0))
     return s0.id
 
 

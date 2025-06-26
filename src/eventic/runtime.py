@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any, ClassVar, Optional
 
 from fastapi import FastAPI
-from dbos import DBOS  # the only direct dbos import
+from dbos import DBOS, Queue  # the only direct dbos import
 from .bootstrap import init_eventic
 
 
@@ -56,6 +56,12 @@ class Eventic(DBOS):  # ① inherit all decorators & queue API
         return cls._singleton
 
     # ---------- convenience helpers ----------
+    @classmethod
+    def queue(cls, name: str, *, concurrency: int | None = None, **kw):
+        # if name not in {"default", "email_sender", "analytics"}:
+        #    raise ValueError(f"Queue {name!r} is not allowed")
+        return Queue(name, concurrency=concurrency, **kw)
+
     @classmethod
     def instance(cls) -> "Eventic":
         if cls._singleton is None:
