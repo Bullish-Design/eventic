@@ -52,8 +52,8 @@ class Story(Record):
         return f"\nTitle: {self.title}\n\n  {self.body}\n\n"
 
 
-# Access the auto-generated queue (defined by RecordMeta → queue_story)
-story_queue = Eventic.queue(Story._queue_name)
+## Access the auto-generated queue (defined by RecordMeta → queue_story)
+# story_queue = Eventic.queue(Story._queue_name)
 
 
 # ────────────────────────────────── 4. DBOS steps ──────────────────────────────────────
@@ -136,26 +136,26 @@ def log_updated_story(story: Story):
 @Eventic.workflow()
 def end_to_end_demo() -> dict:
     sid = create_story()
-    story_queue.enqueue(snapshot, sid)
+    Story.queue.enqueue(snapshot, sid)
 
     # enqueue heavy steps on the per-class queue
-    story_queue.enqueue(draft, sid, "Once upon a time…")
-    story_queue.enqueue(snapshot, sid)
+    Story.queue.enqueue(draft, sid, "Once upon a time…")
+    Story.queue.enqueue(snapshot, sid)
 
-    story_queue.enqueue(change_title, sid, "The Eventic Tale")
-    story_queue.enqueue(snapshot, sid)
+    Story.queue.enqueue(change_title, sid, "The Eventic Tale")
+    Story.queue.enqueue(snapshot, sid)
 
-    story_queue.enqueue(publish, sid)
-    story_queue.enqueue(snapshot, sid)
+    Story.queue.enqueue(publish, sid)
+    Story.queue.enqueue(snapshot, sid)
 
-    story_queue.enqueue(add_property, sid, "audience", "kids")
-    story_queue.enqueue(snapshot, sid)
+    Story.queue.enqueue(add_property, sid, "audience", "kids")
+    Story.queue.enqueue(snapshot, sid)
 
-    story_queue.enqueue(tag_extra, sid, reviewed=True)  # <- final property
+    Story.queue.enqueue(tag_extra, sid, reviewed=True)  # <- final property
     # story_queue.enqueue(snapshot, sid)
 
     # Wait until queue tasks finish (simple polling)
-    handle = story_queue.enqueue(snapshot, sid)
+    handle = Story.queue.enqueue(snapshot, sid)
     handle.get_result()  # blocks until the final snapshot prints
 
     story_instance = Story.hydrate(sid)

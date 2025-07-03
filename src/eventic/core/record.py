@@ -15,6 +15,7 @@ from typing import Any, Dict, Type, TypeVar
 
 from pydantic import BaseModel, Field
 
+from dbos import Queue
 from .properties import PropertiesBase
 # from .events import emit_update, emit_create
 
@@ -39,7 +40,8 @@ class RecordMeta(ModelMeta):
             return cls
 
         queue_name = f"queue_{_snake(name)}"
-        cls._queue_name = queue_name  # type: ignore[attr-defined]
+        cls._queue_name = queue_name
+        cls.queue = Queue(queue_name, concurrency=1)
 
         # late import – avoids circular dep
         from eventic.queues.dispatcher import evented
@@ -108,6 +110,14 @@ class Record(BaseModel, metaclass=RecordMeta):
         from eventic.events import emit_update
 
         emit_update(self)
+
+    @classmethod
+    def where(cls: type[T_Record], **filters: Any) -> list[T_Record]:
+        """
+        Return records whose JSONB properties match *all* of the given key/value
+        pairs.  Example: Story.where(status="published", audience="kids")
+        """
+        return cls._store.find_by_properties(filters)
 
     # hydration
     @classmethod
