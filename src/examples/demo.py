@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine
 # from dbos import DBOS, DBOSConfig, Queue
 
-from eventic import PropertiesBase, Record, Eventic
+from eventic import PropertiesBase, Record, Eventic, on
 # from eventic.runtime import Eventic
 
 # ────────────────────────────────── 1. DBOS + FastAPI ──────────────────────────────────
@@ -47,9 +47,13 @@ class Story(Record):
     title: str | None = None
     body: str | None = None
 
+    # @property
+    def _format_story(self) -> str:
+        return f"\nTitle: {self.title}\n\n  {self.body}\n\n"
+
 
 # Access the auto-generated queue (defined by RecordMeta → queue_story)
-story_queue = Eventic.queue(Story._queue_name)  # type: ignore[attr-defined]
+story_queue = Eventic.queue(Story._queue_name)
 
 
 # ────────────────────────────────── 4. DBOS steps ──────────────────────────────────────
@@ -110,6 +114,23 @@ def tag_extra(story_id: uuid.UUID, **kv) -> None:
     s.properties = props
 
 
+# Event handlers using @on decorators
+@on.create(Story)
+def log_new_story(story: Story):
+    """Log when new orders are created"""
+    print(f"\n\n🆕 New story created: {story.id}")
+    print(f"   Title: {story.title}")
+    print(f"   Body:  {story.body}\n")
+
+
+@on.update(Story)
+def log_updated_story(story: Story):
+    """Log when new orders are created"""
+    print(f"\n\n🆕 New story updated: {story.id}")
+    print(f"   Title: {story.title}")
+    print(f"   Body:  {story.body}\n")
+
+
 # ────────────────────────────────── 5. Workflow that drives everything ────────────────
 @app.get("/")
 @Eventic.workflow()
@@ -137,7 +158,9 @@ def end_to_end_demo() -> dict:
     handle = story_queue.enqueue(snapshot, sid)
     handle.get_result()  # blocks until the final snapshot prints
 
-    versions = Story.hydrate(sid).version + 1
+    story_instance = Story.hydrate(sid)
+
+    versions = story_instance.version + 1
     found_published = Story._store.find_by_properties({"status": "published"})
     found_audience = Story._store.find_by_properties({"audience": "kids"})
     return {
@@ -155,5 +178,12 @@ if __name__ == "__main__":
     Eventic.launch()  # starts DBOS worker threads
     # DBOS().run_in_background()  # starts worker threads locally
     result = end_to_end_demo()
+
     print("\nJSON response that an HTTP caller would receive:")
     pprint(result, width=80)
+
+    story_instance = Story.hydrate(uuid.UUID(result["id"]))
+    print(f"\n\nFinal Story instance:\n{story_instance}")
+    print(f"\nType: {type(story_instance)}\n")
+    formatted_story = story_instance._format_story()
+    print(f"Formatted Story:\n{formatted_story}")

@@ -23,7 +23,7 @@ from dbos import DBOS, DBOSConfig  # , transaction, workflow
 
 
 # ── import your library ──────────────────────────────────────────────────────
-from eventic import init_eventic, Record, PropertiesBase  # top-level exports
+from eventic import Record, PropertiesBase  # init_eventic,  # top-level exports
 
 from dotenv import load_dotenv
 

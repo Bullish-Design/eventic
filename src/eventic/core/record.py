@@ -16,6 +16,8 @@ from typing import Any, Dict, Type, TypeVar
 from pydantic import BaseModel, Field
 
 from .properties import PropertiesBase
+# from .events import emit_update, emit_create
+
 
 T_Record = TypeVar("T_Record", bound="Record")
 ModelMeta = BaseModel.__class__
@@ -58,12 +60,13 @@ class Record(BaseModel, metaclass=RecordMeta):
     version: int = 0
     properties: PropertiesBase | None = None
 
-    # _store: "eventic.persistence.store.RecordStore | None" = None
     _store: ClassVar["RecordStore" | None] = None  # injected by init_eventic()
     model_config = {"frozen": True, "extra": "allow", "arbitrary_types_allowed": True}
 
     # ensure properties exists & has record_type
     def model_post_init(self, _ctx):
+        is_new = self.id is None
+
         if self.id is None:
             object.__setattr__(self, "id", uuid.uuid4())
         if self.properties is None:
@@ -74,6 +77,12 @@ class Record(BaseModel, metaclass=RecordMeta):
             )
         elif self.properties.record_type == "":
             object.__setattr__(self.properties, "record_type", self.__class__.__name__)
+
+        # Emit create event for new instances
+        if is_new and self.version == 0:
+            from eventic.events import emit_create
+
+            emit_create(self)
 
     # copy‑on‑write mutation
     def __setattr__(self, name: str, value: Any):
@@ -94,6 +103,11 @@ class Record(BaseModel, metaclass=RecordMeta):
         object.__setattr__(self, name, value)
         object.__setattr__(self, "version", data["version"])
         object.__setattr__(self, "version_id", uuid.UUID(data["version_id"]))
+
+        # Emit update event
+        from eventic.events import emit_update
+
+        emit_update(self)
 
     # hydration
     @classmethod
