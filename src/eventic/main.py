@@ -26,7 +26,7 @@ db_url = (
     + POSTGRES_USER
     + ":"
     + POSTGRES_PASSWORD
-    + "@localhost/"
+    + "@postgres:5432/"
     + POSTGRES_DB
 )
 
