@@ -172,7 +172,7 @@ def end_to_end_demo() -> dict:
 
 
 # ────────────────────────────────── 6. Run worker & fire the workflow ────────────────
-if __name__ == "__main__":
+def main():
     # from dbos import DBOSRunner
     Eventic.init(name="eventic-demo", database_url=db_url)
     Eventic.launch()  # starts DBOS worker threads
@@ -187,3 +187,7 @@ if __name__ == "__main__":
     print(f"\nType: {type(story_instance)}\n")
     formatted_story = story_instance._format_story()
     print(f"Formatted Story:\n{formatted_story}")
+
+
+if __name__ == "__main__":
+    main()
