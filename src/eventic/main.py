@@ -12,6 +12,10 @@ from __future__ import annotations
 import os
 import uvicorn
 from eventic import Eventic
+from fastapi import Request
+import json
+from datetime import datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -45,6 +49,33 @@ def main() -> None:
     @app.get("/")
     def health() -> dict[str, str]:
         return {"status": "running"}
+
+    @app.post("/webhook")
+    async def webhook(request: Request):
+        """Log any incoming JSON to file."""
+        try:
+            # Get request body
+            body = await request.json()
+
+            # Add metadata
+            log_entry = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "headers": dict(request.headers),
+                "source_ip": request.client.host if request.client else None,
+                "body": body,
+            }
+
+            ## Append to JSONL file
+            # with open(LOG_FILE, "a") as f:
+            #    f.write(json.dumps(log_entry) + "\n")
+            print(f"{json.dumps(log_entry, indent=2)}\n")
+            print(f"✓ Logged webhook from {log_entry['source_ip']}")
+
+            return {"status": "logged", "timestamp": log_entry["timestamp"]}
+
+        except Exception as e:
+            print(f"✗ Error: {e}")
+            return {"status": "error", "message": str(e)}, 400
 
     # Run server
     uvicorn.run(app, host="0.0.0.0", port=8000)
