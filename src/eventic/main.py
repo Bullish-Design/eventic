@@ -73,7 +73,7 @@ def main() -> None:
 
             return {
                 "status": "logged",
-                "Request:": f"\n{json.dumps(log_entry, indent=2)}\n",
+                "Request:": log_entry,
             }
 
         except Exception as e:
