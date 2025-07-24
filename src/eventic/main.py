@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import uvicorn
-from eventic import Eventic
+from eventic import Eventic, Record, on
 from fastapi import Request
 import json
 from datetime import datetime
@@ -37,6 +37,16 @@ db_url = (
 print(f"\nConnecting to Postgres at {db_url}\n")
 
 
+# ────────────────────────────────── 3. Concrete Record ─────────────────────────────────
+class Story(Record):
+    title: str | None = None
+    body: str | None = None
+
+    # @property
+    def _format_story(self) -> str:
+        return f"\nTitle: {self.title}\n\n  {self.body}\n\n"
+
+
 def main() -> None:
     """Minimal Eventic server."""
     # db_url = db_url  # os.getenv("DBOS_DATABASE_URL")
@@ -57,12 +67,16 @@ def main() -> None:
             # Get request body
             body = await request.json()
 
+            # Create an instance of Story:
+            story = Story(**body)
+
             # Add metadata
             log_entry = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "headers": dict(request.headers),
                 "source_ip": request.client.host if request.client else None,
                 "body": body,
+                "story": story,
             }
 
             ## Append to JSONL file
