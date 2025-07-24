@@ -71,7 +71,10 @@ def main() -> None:
             print(f"{json.dumps(log_entry, indent=2)}\n")
             print(f"✓ Logged webhook from {log_entry['source_ip']}")
 
-            return {"status": "logged", "timestamp": log_entry["timestamp"]}
+            return {
+                "status": "logged",
+                "Request:": f"\n{json.dumps(log_entry, indent=2)}\n",
+            }
 
         except Exception as e:
             print(f"✗ Error: {e}")
