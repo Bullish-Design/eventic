@@ -76,7 +76,7 @@ def main() -> None:
                 "headers": dict(request.headers),
                 "source_ip": request.client.host if request.client else None,
                 "body": body,
-                "story": story,
+                "story": story.dict(),  # Convert Story to dict
             }
 
             ## Append to JSONL file
