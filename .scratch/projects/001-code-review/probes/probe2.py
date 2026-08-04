@@ -1,0 +1,5 @@
+# Check callable(classmethod) and callable(staticmethod)
+cm = classmethod(lambda x: x)
+sm = staticmethod(lambda x: x)
+print("classmethod callable:", callable(cm))
+print("staticmethod callable:", callable(sm))
