@@ -20,11 +20,19 @@ from typing import Any, ClassVar, Optional
 
 from fastapi import FastAPI
 from dbos import DBOS, Queue  # the only direct dbos import
-from .bootstrap import init_eventic
-
-
 from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
+
+from .bootstrap import init_eventic
+from .core.record import Record
+
+
+def _normalize_db_url(url: str) -> str:
+    """Mirror DBOS 2.29's internal normalization so both sides use psycopg3."""
+    u = make_url(url)
+    if u.drivername.startswith("postgresql") and u.drivername != "postgresql+psycopg":
+        u = u.set(drivername="postgresql+psycopg")
+    return str(u)
 
 
 class Eventic(DBOS):  # ① inherit all decorators & queue API
@@ -47,13 +55,33 @@ class Eventic(DBOS):  # ① inherit all decorators & queue API
         fastapi: Optional[FastAPI] = None,
         **extra_cfg: Any,
     ) -> "Eventic":
-        if cls._singleton is None:
-            cfg = {"name": name, "database_url": database_url, **extra_cfg}
-            cls._singleton = cls(config=cfg, fastapi=fastapi)
-            cls._engine = create_engine(database_url, pool_pre_ping=True, future=True)
+        if cls._singleton is not None:
+            raise RuntimeError(
+                "Eventic.init()/create_app() may only be called once per process; "
+                "call Eventic.reset() first (see Step 5.3)."
+            )
+        cfg = {
+            "name": name,
+            "application_database_url": database_url,  # replaces deprecated database_url
+            **extra_cfg,
+        }
+        cls._singleton = cls(config=cfg, fastapi=fastapi)
+        cls._engine = create_engine(
+            _normalize_db_url(database_url), pool_pre_ping=True, future=True
+        )
 
-            init_eventic(cls._engine)  # auto-wire RecordStores
+        init_eventic(cls._engine)  # auto-wire RecordStores
         return cls._singleton
+
+    # ---------- lifecycle (tests, multi-app) ----------
+    @classmethod
+    def reset(cls) -> None:
+        """Tear down the singleton so the next init() starts fresh (tests, multi-app)."""
+        if cls._singleton is not None:
+            DBOS.destroy()
+        cls._singleton = None
+        cls._engine = None
+        Record._store = None  # subclasses inherit None via class lookup
 
     # ---------- convenience helpers ----------
     @classmethod
