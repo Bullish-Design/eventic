@@ -1,183 +1,64 @@
-"""
-full_demo.py – One-shot showcase of Eventic + DBOS queues.
+"""eventic demo — versioned Pydantic aggregates whose history is an event
+stream. Core only: pydantic + SQLAlchemy on SQLite, no DBOS required.
 
-Assumes:
-  • DBOS >= 1.5  (Queue API present)
-  • Postgres URL in $DBOS_DATABASE_URL
+Run:  .venv/bin/python -m eventic.examples.demo
 """
 
-import os
-import uuid
-from pprint import pprint
+from __future__ import annotations
 
-from fastapi import FastAPI
-from sqlalchemy import create_engine
-# from dbos import DBOS, DBOSConfig, Queue
+import tempfile
 
-from eventic import PropertiesBase, Record, Eventic, on
-# from eventic.runtime import Eventic
-
-# ────────────────────────────────── 1. DBOS + FastAPI ──────────────────────────────────
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-if os.environ.get("DBOS_DATABASE_URL"):
-    db_url = os.environ["DBOS_DATABASE_URL"]
-else:
-    db_url = (
-        "postgresql://"
-        + os.environ.get("POSTGRES_USER", "")
-        + ":"
-        + os.environ.get("POSTGRES_PASSWORD", "")
-        + "@localhost/"
-        + os.environ.get("POSTGRES_DB", "eventic")
-    )
-
-print(f"\nConnecting to {db_url}\n")
+from eventic import Record, connect, on_commit
 
 
-app = Eventic.create_app("eventic-demo", db_url=db_url)
-
-
-# ────────────────────────────────── 3. Concrete Record ─────────────────────────────────
 class Story(Record):
     title: str | None = None
     body: str | None = None
 
-    # @property
-    def _format_story(self) -> str:
-        return f"\nTitle: {self.title}\n\n  {self.body}\n\n"
+
+@on_commit(Story, kind="create")
+def log_new_story(event):
+    print(f"  [event] created {event.record.title!r} (v{event.record.version})")
 
 
-## Access the auto-generated queue (defined by RecordMeta → queue_story)
+@on_commit(Story, kind="update")
+def log_update(event):
+    print(f"  [event] updated -> {event.delta}")
 
 
-# ────────────────────────────────── 4. DBOS steps ──────────────────────────────────────
-@Eventic.transaction()
-def create_story() -> uuid.UUID:
-    s0 = Story()  # version 0
-    print(f"\n→ Created Story v{s0.version} / id={s0.id} / version_id={s0.version_id}")
-    Story._store.append(s0)
-    return s0.id
+def main() -> None:
+    connect(f"sqlite:///{tempfile.gettempdir()}/eventic_demo.db")
 
+    print("== construct (pure, no I/O) ==")
+    story = Story(title="The Eventic Tale", body="Once upon a time…")
+    print(f"  in-memory v{story.version} / version_id={story.version_id}")
 
-@Eventic.transaction()
-def draft(story_id: uuid.UUID, text: str) -> None:
-    s = Story.hydrate(story_id)
-    s.body = text  # version bump + queued event
+    print("\n== save() — the only way to persist ==")
+    story = story.save()
 
+    print("\n== update() returns the NEW version; the original is untouched ==")
+    story = story.update(body="Once upon a time… the log became the event stream.")
+    print(f"  now v{story.version}")
 
-@Eventic.transaction()
-def change_title(story_id: uuid.UUID, new_title: str) -> None:
-    """Bumps version and writes an immutable row."""
-    s = Story.hydrate(story_id)
-    s.title = new_title
+    print("\n== edit() batches several changes into ONE version ==")
+    with story.edit() as e:
+        e.meta["status"] = "published"
+        e.meta["audience"] = "developers"
+    print(f"  now v{story.version}; history length={len(Story.history(story.id))}")
 
+    print("\n== reads ==")
+    fresh = Story.get(story.id)
+    print(f"  latest : v{fresh.version} {fresh.title!r} status={fresh.meta['status']}")
+    v1 = Story.get(story.id, version=1)
+    print(f"  v1     : {v1.body[:48]}…")
+    published = Story.where(**{"meta.status": "published"})
+    print(f"  where(meta.status=published) -> {len(published)} record(s)")
 
-@Eventic.transaction()
-def publish(story_id: uuid.UUID) -> None:
-    s = Story.hydrate(story_id)
-    # s.title = title  # version bump
-    # s.properties.add(status="published")
+    print("\n== the full version log ==")
+    for v in Story.history(story.id):
+        print(f"  v{v.version}: title={v.title!r} body={v.body[:40]!r}…")
 
-    # H1: add() persists a new version automatically
-    s.properties.add(status="published")
-
-
-@Eventic.step()
-def snapshot(story_id: uuid.UUID):
-    latest = Story.hydrate(story_id)
-    print(f"\n→ Snapshot @ v{latest.version} / version_id={latest.version_id}")
-    pprint(latest.model_dump(), width=80)
-
-
-@Eventic.transaction()
-def add_property(story_id: uuid.UUID, key: str, value: str) -> None:
-    """Add an arbitrary key/value pair to the Story.properties bag."""
-    s = Story.hydrate(story_id)
-    s.properties.add(**{key: value})  # H1: persists automatically
-
-
-@Eventic.transaction()
-def tag_extra(story_id: uuid.UUID, **kv) -> None:
-    """Generic helper that adds an arbitrary property (creates new version)."""
-    s = Story.hydrate(story_id)
-    s.properties.add(**kv)  # H1: persists automatically
-
-
-# Event handlers using @on decorators
-@on.create(Story)
-def log_new_story(story: Story):
-    """Log when new orders are created"""
-    print(f"\n\n🆕 New story created: {story.id}")
-    print(f"   Title: {story.title}")
-    print(f"   Body:  {story.body}\n")
-
-
-@on.update(Story)
-def log_updated_story(story: Story):
-    """Log when new orders are created"""
-    print(f"\n\n🆕 New story updated: {story.id}")
-    print(f"   Title: {story.title}")
-    print(f"   Body:  {story.body}\n")
-
-
-# ────────────────────────────────── 5. Workflow that drives everything ────────────────
-@app.get("/")
-@Eventic.workflow()
-def end_to_end_demo() -> dict:
-    sid = create_story()
-    Story.queue.enqueue(snapshot, sid)
-
-    # enqueue heavy steps on the per-class queue
-    Story.queue.enqueue(draft, sid, "Once upon a time…")
-    Story.queue.enqueue(snapshot, sid)
-
-    Story.queue.enqueue(change_title, sid, "The Eventic Tale")
-    Story.queue.enqueue(snapshot, sid)
-
-    Story.queue.enqueue(publish, sid)
-    Story.queue.enqueue(snapshot, sid)
-
-    Story.queue.enqueue(add_property, sid, "audience", "kids")
-    Story.queue.enqueue(snapshot, sid)
-
-    Story.queue.enqueue(tag_extra, sid, reviewed=True)  # <- final property
-
-    # Wait until queue tasks finish (simple polling)
-    handle = Story.queue.enqueue(snapshot, sid)
-    handle.get_result()  # blocks until the final snapshot prints
-
-    story_instance = Story.hydrate(sid)
-
-    versions = story_instance.version + 1
-    found_published = Story._store.find_by_properties({"status": "published"})
-    found_audience = Story._store.find_by_properties({"audience": "kids"})
-    return {
-        "id": str(sid),
-        "versions": versions,
-        "search_found_published": str(found_published),
-        "search_found_audience": str(found_audience),
-    }
-
-
-# ────────────────────────────────── 6. Run worker & fire the workflow ────────────────
-def main():
-    # from dbos import DBOSRunner
-    Eventic.launch()  # starts DBOS worker threads
-    # DBOS().run_in_background()  # starts worker threads locally
-    result = end_to_end_demo()
-
-    print("\nJSON response that an HTTP caller would receive:")
-    pprint(result, width=80)
-
-    story_instance = Story.hydrate(uuid.UUID(result["id"]))
-    print(f"\n\nFinal Story instance:\n{story_instance}")
-    print(f"\nType: {type(story_instance)}\n")
-    formatted_story = story_instance._format_story()
-    print(f"Formatted Story:\n{formatted_story}")
+    print("\ndone — demo ran end-to-end.")
 
 
 if __name__ == "__main__":

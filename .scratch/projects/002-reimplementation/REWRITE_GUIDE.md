@@ -607,3 +607,22 @@ Appendix B). Each row: date · step · deviation · reason.
   used ``_reset_delivery()`` per test; when ``eventic.dbos`` was imported at
   collection (it is, by the dbos suite), that reset silently unregistered the
   ``durable`` backend and the dbos suite failed when run after core/plugins.
+- **2026-08-04 · Step 9 · D17 — `eventic/__init__.py` never auto-imports the
+  dbos adapter, even when installed.** The guide's "(+ from eventic.dbos ...
+  only if installed)" would put `dbos` into `sys.modules` for every user who
+  has the extra installed — violating I6 and failing the Step-13 check
+  (`import eventic; assert 'dbos' not in sys.modules`). The adapter is always
+  an explicit import.
+- **2026-08-04 · Step 9 · D18 — the public-surface swap breaks the old suite's
+  imports; the old test files are removed now, the old library modules stay
+  until Step 12.** The new `__init__.py` exports the new `Record`, and the old
+  suite imports `Eventic`/`Record`/`on` from the package root — the names
+  cannot coexist (Step 12 deletes the old tests anyway; their behavioral
+  intent is covered by `tests/core|plugins|dbos`). The "old suite green until
+  Step 12" gate therefore holds for Steps 0–8 (verified 28 green there); the
+  swap is the natural end of the old suite's runnable life.
+- **2026-08-04 · Step 9 · D19 — the webhook reindex wait must live inside the
+  TestClient window.** Closing the TestClient triggers the DBOS lifespan
+  shutdown (`destroy()`), which stops the queue workers — the durable reindex
+  never completes if you poll for it after the `with` block. Documented in the
+  test.

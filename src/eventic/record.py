@@ -73,17 +73,40 @@ class Record(BaseModel):
     _identity: ClassVar[Uuid5Deterministic] = Uuid5Deterministic()
     _interceptors: ClassVar[list] = []
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, hair_trigger: bool = False, **kwargs):
         super().__init_subclass__(**kwargs)
         # the class assembler: validate every plugin base at class definition
         # (never at import, never at first call) and attach the seam providers
         plugins = [b for b in cls.__bases__ if isinstance(b, type) and issubclass(b, Plugin)]
         assemble(cls, plugins)
+        if hair_trigger:
+            # THE scripting escape hatch — re-enables the old implicit writes
+            # behind an explicit flag. Scripts only; violates I2 (documented).
+            cls._hair_trigger = True
+
+            def __setattr__(self, name: str, value: Any) -> None:
+                BaseModel.__setattr__(self, name, value)  # pydantic validates
+                if name.startswith("_") or name in ("id", "version", "version_id"):
+                    return
+                if getattr(self, "_hair_live", False):
+                    self._hair_commit()
+
+            cls.__setattr__ = __setattr__
+
+    def _hair_commit(self) -> None:
+        """Persist the current in-memory state as the next version and reflect
+        it back (hair_trigger only)."""
+        new = self.update()
+        for f in new.__class__.model_fields:
+            object.__setattr__(self, f, getattr(new, f))
+        for k, v in (new.__pydantic_extra__ or {}).items():
+            object.__setattr__(self, k, v)
 
     def model_post_init(self, _):
         """PURE: stamp v0's deterministic identity only — never any I/O (I3)."""
         if self.version_id is None:
             object.__setattr__(self, "version_id", _uuid5(self.id, self.version))
+        object.__setattr__(self, "_hair_live", True)  # hair_trigger fires only post-construction
 
     # ------------------------------------------------------------------ #
     # explicit writes (I2 — nothing else persists)

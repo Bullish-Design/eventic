@@ -257,3 +257,18 @@ the K=2 snapshot/delta pattern. **Cross-suite fix (D16):** the plugins suite
 now snapshot/restores the delivery registry (clearing it nuked the durable
 backend the dbos suite registered at collection). All 75 new tests green
 together; old suite 28 green. **Committed:** Step 8.
+
+## 2026-08-04 — Session 3 (cont.) — Step 9 (Phase 5)
+
+**Step 9 — public surface + examples.** New `__init__.py` exporting `Record,
+connect, on_commit, use, DiffStorage, Plugin, Seam, StaleVersionError + the
+error hierarchy`; D17: no auto-import of the dbos adapter (I6 + Step-13 live
+check now pass in a fresh interpreter). `hair_trigger=True` escape hatch
+(scripts only; violates I2; construction stays pure — verified). Rewrote
+`examples/demo.py` (core-only SQLite demo, runs end-to-end) and
+`examples/webhook.py` (was main.py; create_app + durable reindex + id-only
+enqueue, M6 strict DTO). New webhook e2e test in the dbos suite (post →
+persisted v0 → durable reindex SUCCESS; D19: wait inside the TestClient
+window). D18: old test files removed (the swap makes their imports
+impossible); old library modules stay until Step 12. 83 tests green; demo
+runs. **Committed:** Step 9.
