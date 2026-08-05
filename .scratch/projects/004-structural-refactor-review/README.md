@@ -19,5 +19,7 @@ before 0.3 is treated as a durable event-history library.
 - `LOG.md` — dated review activity and verification evidence
 - `REVIEW.md` — invariant audit, 32 prioritized findings, target architecture,
   implementation sequence, and validation matrix
+- `PLUGIN_FRAMEWORK.md` — detailed design for the rewrite's typed, explicit,
+  Pydantic-aware extension framework
 - `probes/runtime_adversarial.py` — executable runtime counterexamples
 - `probes/migration_adversarial.py` — executable Alembic/schema counterexamples
