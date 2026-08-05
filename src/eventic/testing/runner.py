@@ -11,7 +11,7 @@ import dataclasses
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -254,11 +254,14 @@ def _run_step(store: Store, ctx: _Context, step: Step) -> None:
         claimed = ctx.last_claimed
         if not claimed:
             raise StepFailure("settle with nothing claimed")
+        available_at = step.available_at
+        if step.status == "retry" and available_at is None:
+            available_at = datetime.now(UTC) + timedelta(minutes=1)
         settlements = [
             Settlement(
                 intent_id=c.intent_id,
                 status=step.status,  # type: ignore[arg-type]
-                available_at=step.available_at,
+                available_at=available_at,
                 error=step.error,
             )
             for c in claimed
