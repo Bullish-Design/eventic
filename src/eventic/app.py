@@ -13,7 +13,13 @@ from typing import TYPE_CHECKING, Any, Literal, get_origin
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from eventic.errors import CapabilityUnsupported, ConfigError
+from eventic.errors import (
+    CapabilityUnsupported,
+    ConfigError,
+    DuplicateId,
+    UnknownStream,
+    UnsupportedHandler,
+)
 from eventic.meta import Meta, NoMeta
 from eventic.stream import Stream
 from eventic.subscription import Outbox, Subscription
@@ -94,31 +100,42 @@ class App(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> App:
-        problems: list[str] = []
+        problems: list[tuple[type[ConfigError], str]] = []
 
         if not self.id:
-            problems.append("app id must be non-empty")
+            problems.append((ConfigError, "app id must be non-empty"))
 
         stream_names: set[str] = set()
         for stream in self.streams:
             if stream.name in stream_names:
-                problems.append(f"duplicate stream name: {stream.name}")
+                problems.append((DuplicateId, f"duplicate stream name: {stream.name}"))
             stream_names.add(stream.name)
 
         sub_ids: set[str] = set()
         for sub in self.subscriptions:
             if sub.id in sub_ids:
-                problems.append(f"duplicate subscription id: {sub.id}")
+                problems.append((DuplicateId, f"duplicate subscription id: {sub.id}"))
             sub_ids.add(sub.id)
             if sub.stream.name not in stream_names:
                 problems.append(
-                    f"subscription {sub.id}: stream {sub.stream.name} is not "
-                    "installed in this app"
+                    (
+                        UnknownStream,
+                        f"subscription {sub.id}: stream {sub.stream.name} is not "
+                        "installed in this app",
+                    )
                 )
-            problems.extend(_handler_problems(sub))
+            problems.extend((UnsupportedHandler, msg) for msg in _handler_problems(sub))
 
         if problems:
-            raise ConfigError("\n".join(problems))
+            # §2.1: all checks run and are reported together. If every failure
+            # is the same fault class, raise that class so callers can catch
+            # it specifically; heterogeneous failures raise the common base
+            # (F6).
+            message = "\n".join(msg for _, msg in problems)
+            classes = {cls for cls, _ in problems}
+            if len(classes) == 1:
+                raise classes.pop()(message)
+            raise ConfigError(message)
         object.__setattr__(self, "streams", tuple(self.streams))
         object.__setattr__(self, "subscriptions", tuple(self.subscriptions))
         return self

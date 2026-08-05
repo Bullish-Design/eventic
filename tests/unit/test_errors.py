@@ -104,3 +104,117 @@ def test_all_constructible(cls: type[EventicError]) -> None:
     e = cls("boom")
     assert isinstance(e, EventicError)
     assert isinstance(e, Exception)
+
+
+# ---------------------------------------------------------------------------
+# Behaviour: each declaration fault raises the class §2.1 assigns to it.
+# (F6: the classes used to exist and subclass ConfigError but were raised
+# nowhere — every fault surfaced as a bare ConfigError.)
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel  # noqa: E402
+
+from eventic.app import App  # noqa: E402
+from eventic.envelopes import Commit  # noqa: E402
+from eventic.stream import Stream  # noqa: E402
+from eventic.subscription import Subscription  # noqa: E402
+
+
+class _Todo(BaseModel):
+    text: str = ""
+
+
+def _sync(c: Commit[_Todo, BaseModel]) -> None: ...
+
+
+async def _async(c: Commit[_Todo, BaseModel]) -> None: ...
+
+
+def _bad_arity(c: Commit[_Todo, BaseModel], extra: int) -> None: ...
+
+
+def test_duplicate_id_raised_for_duplicate_stream_name() -> None:
+    todos = Stream(_Todo, name="todos")
+    with pytest.raises(DuplicateId):
+        App(id="a", streams=[todos, todos])
+
+
+def test_duplicate_id_raised_for_duplicate_subscription_id() -> None:
+    todos = Stream(_Todo, name="todos")
+    with pytest.raises(DuplicateId):
+        App(
+            id="a",
+            streams=[todos],
+            subscriptions=[
+                Subscription(id="s", stream=todos, handler=_sync),
+                Subscription(id="s", stream=todos, handler=_sync),
+            ],
+        )
+
+
+def test_unknown_stream_raised_for_uninstalled_stream() -> None:
+    todos = Stream(_Todo, name="todos")
+    elsewhere = Stream(_Todo, name="elsewhere")
+    with pytest.raises(UnknownStream):
+        App(
+            id="a",
+            streams=[todos],
+            subscriptions=[Subscription(id="s", stream=elsewhere, handler=_sync)],
+        )
+
+
+def test_unsupported_handler_raised_for_async() -> None:
+    todos = Stream(_Todo, name="todos")
+    with pytest.raises(UnsupportedHandler):
+        App(
+            id="a",
+            streams=[todos],
+            subscriptions=[Subscription(id="s", stream=todos, handler=_async)],
+        )
+
+
+def test_unsupported_handler_raised_for_bad_arity() -> None:
+    todos = Stream(_Todo, name="todos")
+    with pytest.raises(UnsupportedHandler):
+        App(
+            id="a",
+            streams=[todos],
+            subscriptions=[Subscription(id="s", stream=todos, handler=_bad_arity)],
+        )
+
+
+def test_mixed_faults_raise_the_common_base_with_all_messages() -> None:
+    """Several distinct fault classes together raise ConfigError, listing every
+    failure — the §2.1 'reported together' requirement."""
+    todos = Stream(_Todo, name="todos")
+    other = Stream(_Todo, name="other")
+    with pytest.raises(ConfigError) as excinfo:
+        App(
+            id="a",
+            streams=[todos, todos],
+            subscriptions=[
+                Subscription(id="s", stream=other, handler=_async),
+            ],
+        )
+    assert not isinstance(excinfo.value, DuplicateId)
+    msg = str(excinfo.value)
+    assert "duplicate stream name: todos" in msg
+    assert "stream other is not installed" in msg
+    assert "async handlers are not supported" in msg
+
+
+def test_single_fault_class_carries_all_its_messages() -> None:
+    """Two DuplicateId faults raise DuplicateId with both messages joined."""
+    todos = Stream(_Todo, name="todos")
+    with pytest.raises(DuplicateId) as excinfo:
+        App(
+            id="a",
+            streams=[todos, todos],
+            subscriptions=[
+                Subscription(id="s", stream=todos, handler=_sync),
+                Subscription(id="s", stream=todos, handler=_sync),
+            ],
+        )
+    msg = str(excinfo.value)
+    assert "duplicate stream name: todos" in msg
+    assert "duplicate subscription id: s" in msg

@@ -73,13 +73,17 @@ cases: list[tuple[str, type[ConfigError], object]] = [
     ),
 ]
 
+mismatches = 0
 for label, expected, build in cases:
     try:
         build()  # type: ignore[operator]
         actual = "NO ERROR"
     except ConfigError as exc:
         actual = type(exc).__name__
-    print(f"  {label:38} spec={expected.__name__:24} actual={actual}")
+    agree = actual == expected.__name__
+    mismatches += 0 if agree else 1
+    print(f"  {label:38} spec={expected.__name__:24} actual={actual}  {'ok' if agree else 'MISMATCH'}")
+assert mismatches == 0, f"{mismatches} §2.1 taxonomy mismatches (F6)"
 
 print("\n=== R14: Stream / Meta / App equality ===")
 a = Stream(Todo, name="todos", schema_version=1)
