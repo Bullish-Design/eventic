@@ -90,6 +90,8 @@ a = Stream(Todo, name="todos", schema_version=1)
 b = Stream(Todo, name="todos", schema_version=1)
 c = Stream(Other, name="todos", schema_version=1)  # different MODEL, same name
 print(f"  Stream(Todo,'todos') == Stream(Other,'todos')      -> {a == c}")
+print("  (name-only is deliberate and documented: App equality is")
+print("   identity-of-declaration, not equivalence-of-behaviour)")
 m1 = Meta(Todo, version=1)
 m2 = Meta(Todo, version=2, upcasters={1: make_upcaster(1, 2, lambda t: t)})
 print(f"  Meta(Todo,version=1) == Meta(Todo,version=2)       -> {m1 == m2}")
@@ -97,9 +99,9 @@ print(f"  hash equal                                         -> {hash(m1) == has
 app1 = App(id="a", streams=[a], meta=m1)
 app2 = App(id="a", streams=[c], meta=m2)
 print(f"  App(streams=[Todo],meta=v1) == App([Other],meta=v2)-> {app1 == app2}")
-assert a == c
-assert m1 == m2
-assert app1 == app2
+assert a == c  # deliberate
+assert m1 != m2, "F9: Meta equality must include version"
+assert app1 != app2
 
 print("\n=== R13: make_upcaster identity ===")
 fn = lambda t: t  # noqa: E731
@@ -109,11 +111,11 @@ print(f"  make_upcaster(1,2,fn) == make_upcaster(1,2,fn)     -> {u1 == u2}")
 print(f"  same class                                         -> {type(u1) is type(u2)}")
 print("  (nothing in the library compares upcasters, so this is latent only)")
 
-print("\n=== changed_keys: a key present in `before` but absent in `after` ===")
+print("\n=== F13: changed_keys reports a key removed from `before` ===")
 from eventic.planning import changed_keys  # noqa: E402
 
 before = {"a": 1, "removed": 2}
 after = {"a": 1}
 print(f"  changed_keys({before}, {after}) = {sorted(changed_keys(before, after))}")
-print("  -> a deleted top-level key is NOT reported as changed")
-assert changed_keys(before, after) == frozenset()
+print("  -> a deleted top-level key IS reported as changed (F13)")
+assert changed_keys(before, after) == frozenset({"removed"})

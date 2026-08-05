@@ -196,6 +196,32 @@ def test_missing_upcaster_is_declaration_error() -> None:
         Stream(TaskV2, name="tasks", schema_version=2, upcasters={})
 
 
+def test_v2_writer_and_v1_reader_raises(tmp_path: Path) -> None:
+    """F16: the dangerous rolling-deploy direction — a v2 writer and a
+    not-yet-deployed v1 reader — must raise UndecodableRevision, never
+    silently validate the v2 row against the v1 model."""
+    from eventic.errors import UndecodableRevision
+    from eventic.ids import AggregateKey
+
+    store = SQLite(str(tmp_path / "downgrade.db"))
+    v2_runtime: Runtime = _v2_app().bind(store)
+    first = v2_runtime[v2_runtime.app.streams[0]].create(TaskV2(text="v2"))
+
+    stored = store.head(AggregateKey("tasks", first.id))
+    assert stored is not None and stored.schema_version == 2
+
+    v1_app = App(id="reader", streams=[Stream(TaskV1, name="tasks", schema_version=1)])
+    v1_runtime: Runtime = v1_app.bind(store)
+    with pytest.raises(UndecodableRevision) as excinfo:
+        v1_runtime[v1_app.streams[0]].get(first.id)
+    msg = str(excinfo.value)
+    assert "2" in msg and "1" in msg and "tasks" in msg
+    # the exact-revision read path raises too
+    with pytest.raises(UndecodableRevision):
+        v1_runtime[v1_app.streams[0]].get(first.id, revision=0)
+    store.close()
+
+
 def test_upcaster_signature_is_pure_json() -> None:
     """The Upcaster protocol passes only a JSON tree: a side-effecting
     upcaster is impossible to write without lying about its signature."""
