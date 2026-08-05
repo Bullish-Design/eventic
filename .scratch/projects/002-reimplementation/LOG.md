@@ -62,3 +62,34 @@ REIMAGINE_REVIEW.md §1):**
 explicit `save/update`) on this branch and confirm the suite stays green at each
 step; add a Postgres-marked concurrency test that asserts the *loud* IntegrityError
 behaviour the rewrite introduces.
+
+## 2026-08-04 — Session 2 (design dialogue → conceptual docs)
+
+Explored, in conversation, three architectural questions and captured the durable
+conclusions as two new design documents:
+
+- Should this be built on **SQLModel**? Conclusion: only if the product pivots to
+  typed-column tables — which trades away the cheap append-only versioning that
+  defines eventic and raises (not lowers) the metaclass machinery the review told us
+  to cut. Keep the JSONB kernel; SQLModel is a *persistence-seam* option, not the base.
+- **DBOS as a mixin, events as the core?** Yes — this is the right decomposition:
+  the version log *is* the event stream; delivery of events is a swappable backend
+  (`sync` default, `durable` via DBOS). It resolves R-C4 (pre-commit events), R-S1
+  (pickled Records), R-P3 (DBOS tax), and the same-name-class crash as side effects.
+- **Incremental diff storage?** Doable as a *storage codec* invisible above
+  `hydrate()`; composes with events + DBOS, but fights the SQLModel typed-column
+  option. Recommend forward-delta + snapshot-every-K (preserves append-only);
+  opt-in, off by default, only worth it for large aggregates.
+
+**New deliverables:**
+- `CONCEPT.md` — the irreducible idea (log-is-the-event-stream) and the seven
+  invariants (I1–I7) + the canonical write/read pipeline every plugin extends.
+- `PLUGINS.md` — a general, closed-set (five-seam) plugin framework where
+  durable-delivery, diff-storage, typed-columns, multi-tenancy, encryption, etc. are
+  all the same kind of thing (a provider at a seam). Includes the anti-gold-plating
+  guardrails (§8) and the rule: *don't build the framework before the second real
+  plugin exists.*
+
+These two are conceptual/forward-looking; they don't change the Plan's first three
+(already-green) steps. `TARGET_ARCHITECTURE.md` §1 (events) and the `eventic.dbos`
+adapter should be re-expressed in plugin/seam terms on its next revision.
