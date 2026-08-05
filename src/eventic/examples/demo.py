@@ -40,10 +40,11 @@ def main() -> None:
     story = story.update(body="Once upon a time… the log became the event stream.")
     print(f"  now v{story.version}")
 
-    print("\n== edit() batches several changes into ONE version ==")
-    with story.edit() as e:
-        e.meta["status"] = "published"
-        e.meta["audience"] = "developers"
+    print("\n== draft().commit() batches several changes into ONE version ==")
+    d = story.draft()
+    d.meta["status"] = "published"
+    d.meta["audience"] = "developers"
+    story = d.commit()  # assignment is the point — commit RETURNS the new version
     print(f"  now v{story.version}; history length={len(Story.history(story.id))}")
 
     print("\n== reads ==")

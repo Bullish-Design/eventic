@@ -15,7 +15,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-from eventic.models import Base  # noqa: F401  (registers the records table)
+from eventic.store.schema import Base  # noqa: F401  (registers the triad)
 
 config = context.config
 

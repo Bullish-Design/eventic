@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eventic"
-version = "0.2.0"
+version = "0.3.0"
 description = "Versioned Pydantic aggregates whose history is an event stream."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -30,7 +30,8 @@ test = [
 ]
 
 [project.scripts]
-eventic-example = "eventic.examples.demo:main"   # fixed in Step 6 (M2)
+eventic = "eventic.cli:main"
+eventic-example = "eventic.examples.demo:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eventic"]
@@ -39,6 +40,3 @@ packages = ["src/eventic"]
 markers = [
     "postgres: integration tests requiring a live Postgres service (CI only)",
 ]
-
-#[tool.hatch.build.targets.sdist]
-#include = ["src/examples/**"]

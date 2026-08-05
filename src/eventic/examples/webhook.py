@@ -1,25 +1,25 @@
 """Eventic webhook server — the opt-in DBOS path.
 
-An incoming POST is persisted as version 0, then a *durable* reindex step is
-enqueued with only the record **id** (never a pickled Record — R-S1). The
-reindex runs later on the DBOS queue worker, re-hydrates by id, and must be
-idempotent (the async contract).
+An incoming POST is persisted as version 0, then durable delivery is handed to
+DBOS: the commit stages an outbox row, and the request handler drains it onto a
+DBOS queue, where each handler runs as a DBOS step with the full ``Event``.
 
-Requires ``pip install eventic[dbos]``. Run with uvicorn:
-    uvicorn eventic.examples.webhook:app
+The app is built by a **function you call** — importing this module has no
+side effects and connects nothing (F20). Requires ``pip install eventic[dbos]``.
+Run with uvicorn:
+    uvicorn eventic.examples.webhook:build_app --factory
 """
 
 from __future__ import annotations
 
 import json
 import os
-import uuid
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from eventic import Record
-from eventic.dbos import create_app, durable, queue
+from eventic import Record, on_commit
+from eventic.contrib.dbos import DbosDispatcher, DbosStore
 
 load_dotenv()
 
@@ -55,24 +55,28 @@ class NoteIn(BaseModel):
     body: str | None = None
 
 
-@durable
-def reindex(note_id: str) -> None:
-    """DBOS step: id in, re-hydrate, index. Idempotent by contract."""
-    note = Note.get(uuid.UUID(note_id))
+@on_commit(Note, via="outbox", queue="notes")
+def reindex(event) -> None:
+    """DBOS step: rebuild the Event, re-hydrate, index. Idempotent by contract."""
+    note = event.record
     print(json.dumps({"reindexed": str(note.id), "title": note.title, "version": note.version}))
 
 
 def build_app(*, db_url: str | None = None):
-    """FastAPI + DBOS + the eventic engine on one database."""
-    app = create_app("notes-svc", db_url=db_url or _default_db_url())
+    """FastAPI + DBOS + an eventic ``DbosStore`` on one database."""
+    from fastapi import FastAPI
+
+    from dbos import DBOS
+
+    url = db_url or _default_db_url()
+    app = FastAPI()
+    DBOS(config={"name": "notes-svc", "application_database_url": url}, fastapi=app)
+    store = DbosStore(url, create_tables=True).activate()
 
     @app.post("/webhook")
     async def webhook(payload: NoteIn):
         note = Note(title=payload.title, body=payload.body).save()
-        queue("notes").enqueue(reindex, str(note.id))  # id-only arg (R-S1)
+        DbosDispatcher(store).drain()  # durable delivery onto the DBOS queue
         return {"status": "logged", "id": str(note.id)}
 
     return app
-
-
-app = build_app()  # module-level object for `uvicorn eventic.examples.webhook:app`

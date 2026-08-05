@@ -1,10 +1,8 @@
-"""Migration tests (Step 10): the 0.1.x → 0.2 data path.
+"""Migration tests (Step 22): the 0.2 → 0.3 triad rebuild.
 
-- A table written by the OLD library hydrates under the NEW one after
-  ``alembic upgrade head`` (properties folded into ``data.meta``).
-- ``upgrade head && downgrade base`` round-trips on SQLite; the fold's
-  downgrade re-adds ``properties`` from ``data.meta``.
-- The C6 backfill runs before the fold (chain order).
+A realistic 0.2 database (both codecs, a plugin-bearing class with phantom
+fields) is seeded via the old migration chain, then ``alembic upgrade head``
+rebuilds it and the upgraded data reads back correctly through the 0.3 API.
 """
 
 import json
@@ -12,14 +10,12 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
-from alembic import command
-from alembic.config import Config
-
-from eventic.connect import _reset, connect, engine
-from eventic.record import Record
+from eventic import Delta, Record, connect
 
 
 def _cfg(url):
@@ -28,61 +24,179 @@ def _cfg(url):
     return cfg
 
 
-class Story(Record):
+class Story(Record, stream="Story"):
     title: str | None = None
     body: str | None = None
 
 
-@pytest.fixture()
-def clean():
-    _reset()
-    yield
-    _reset()
+def _seed_02_database(url):
+    """Build the 0.1→0.2 chain (up to the fold) and seed old-shape rows:
+    a FullSnapshot row with phantom plugin keys and managed keys, plus a
+    DiffStorage snapshot+delta pair. UUIDs are stored in the format the 0.2
+    ORM used (32-hex on SQLite, hyphenated on Postgres), so a raw insert
+    matches what the ORM binds."""
+    command.upgrade(_cfg(url), "fold_properties_into_data")
 
-
-def _old_schema_and_row(url):
-    """Build the 0.1 schema via the 0.1 chain (initial migration only) and
-    insert one old-shape row — the honest old-install path."""
-    command.upgrade(_cfg(url), "6725d5d5ed38")  # the 0.1 initial (with properties)
     eng = create_engine(url)
-    eng.dispose()  # fresh file engine for the insert below (avoids ResourceWarning)
-    eng2 = create_engine(url)
+    is_pg = eng.dialect.name == "postgresql"
+
+    def _id_str(u):
+        return str(u) if is_pg else u.hex
+
     rid = uuid.uuid4()
-    props = {"record_type": "Story", "status": "published"}
-    with Session(eng2) as s:
+    created = datetime.now(timezone.utc).isoformat()
+    with Session(eng) as s:
+        # FullSnapshot row — the model dump with managed + phantom keys
         s.execute(
             text(
                 "INSERT INTO records (version_id, id, version, class_type, "
-                "created_ts, properties, data) VALUES "
-                "(:version_id, :id, 0, 'Story', :created_ts, :properties, :data)"
+                "created_ts, data) VALUES "
+                "(:version_id, :id, :version, :class_type, :created_ts, :data)"
             ),
             {
-                "version_id": uuid.uuid4().hex,  # old v0 ids were RANDOM (R-C2)
-                "id": rid.hex,
-                "created_ts": datetime.now(timezone.utc).isoformat(),
-                "properties": json.dumps(props),
+                "version_id": _id_str(uuid.uuid5(uuid.NAMESPACE_URL, f"eventic:{rid}:0")),
+                "id": _id_str(rid),
+                "version": 0,
+                "class_type": "Story",
+                "created_ts": created,
                 "data": json.dumps(
                     {
                         "id": str(rid),
                         "version": 0,
                         "version_id": str(uuid.uuid4()),
-                        "properties": dict(props),  # the old data embedded the bag
+                        "created_ts": None,
+                        "seam": "codec",
+                        "provides": ["codec"],
+                        "requires": ["persistence:json"],
+                        "priority": 0,
+                        "mode": None,
+                        "meta": {"record_type": "Story", "status": "published"},
                         "title": "old story",
                         "body": "old body",
                     }
                 ),
             },
         )
+        # DiffStorage snapshot + delta pair (old shapes)
+        drid = uuid.uuid4()
+        s.execute(
+            text(
+                "INSERT INTO records (version_id, id, version, class_type, "
+                "created_ts, data) VALUES "
+                "(:version_id, :id, :version, :class_type, :created_ts, :data)"
+            ),
+            {
+                "version_id": _id_str(uuid.uuid5(uuid.NAMESPACE_URL, f"eventic:{drid}:0")),
+                "id": _id_str(drid),
+                "version": 0,
+                "class_type": "MigratedNote",
+                "created_ts": created,
+                "data": json.dumps(
+                    {
+                        "kind": "snapshot",
+                        "state": {
+                            "id": str(drid), "version": 0,
+                            "version_id": str(uuid.uuid4()), "created_ts": None,
+                            "seam": "codec", "mode": None,
+                            "meta": {}, "title": "draft note", "body": "d",
+                        },
+                    }
+                ),
+            },
+        )
+        s.execute(
+            text(
+                "INSERT INTO records (version_id, id, version, class_type, "
+                "created_ts, data) VALUES "
+                "(:version_id, :id, :version, :class_type, :created_ts, :data)"
+            ),
+            {
+                "version_id": _id_str(uuid.uuid5(uuid.NAMESPACE_URL, f"eventic:{drid}:1")),
+                "id": _id_str(drid),
+                "version": 1,
+                "class_type": "MigratedNote",
+                "created_ts": created,
+                "data": json.dumps(
+                    {"kind": "delta", "patch": {"title": "edited note", "version": 1}}
+                ),
+            },
+        )
         s.commit()
+    eng.dispose()
+    return rid, drid
+
+
+def test_upgrade_reads_back_through_03_api(tmp_path):
+    url = f"sqlite:///{tmp_path / 'old.db'}"
+    rid, drid = _seed_02_database(url)
+
+    command.upgrade(_cfg(url), "head")
+
+    # the triad exists; records is gone
+    eng = create_engine(url)
+    names = set(inspect(eng).get_table_names())
+    assert {"eventic_log", "eventic_head", "eventic_outbox"} <= names
+    assert "records" not in names
+    eng.dispose()
+
+    connect(url)
+    story = Story.get(rid)
+    assert story.title == "old story"
+    assert story.version == 0
+    assert story.meta == {"record_type": "Story", "status": "published"}
+    assert story.created_ts is not None
+
+    # the diff-stored aggregate reads correctly after the fold (head = v1).
+    # The old DiffStorage rows migrated to the NEW delta shape, so the class
+    # reading that stream declares the matching codec.
+    class Note(Record, stream="MigratedNote", codec=Delta(k=20)):
+        title: str | None = None
+        body: str | None = None
+
+    note = Note.get(drid)
+    assert note.title == "edited note"  # the delta folded into the head
+    assert note.version == 1
+    assert note.body == "d"
+    assert len(Note.history(drid)) == 2
+
+
+def test_upgrade_strips_phantom_keys_from_log(tmp_path):
+    from eventic import connect
+    from eventic.store import active_store
+    from eventic.store.schema import LogRow
+    from sqlalchemy import select
+
+    url = f"sqlite:///{tmp_path / 'old.db'}"
+    _seed_02_database(url)
+    command.upgrade(_cfg(url), "head")
+
+    connect(url)
+    with Session(active_store().engine) as s:
+        row = s.execute(select(LogRow).where(LogRow.stream == "Story")).scalar_one()
+    assert "seam" not in row.data
+    assert "provides" not in row.data
+    assert "id" not in row.data and "version_id" not in row.data
+
+
+def test_upgrade_downgrade_roundtrip_sqlite(tmp_path):
+    url = f"sqlite:///{tmp_path / 'rt.db'}"
+    _seed_02_database(url)
+    command.upgrade(_cfg(url), "head")
+    eng = create_engine(url)
+    assert "eventic_log" in set(inspect(eng).get_table_names())
+    eng.dispose()
+
+    command.downgrade(_cfg(url), "fold_properties_into_data")
+    eng2 = create_engine(url)
+    assert "records" in set(inspect(eng2).get_table_names())
+    with eng2.connect() as c:
+        n = c.execute(text("SELECT COUNT(*) FROM records")).scalar()
     eng2.dispose()
-    return rid
+    assert n == 3  # all three rows survived the roundtrip
 
 
 @pytest.mark.postgres
 def test_migrations_roundtrip_postgres():
-    """PG branch of the chain (Step-13 matrix): round-trips on a live PG.
-    Requires POSTGRES_HOST/USER/PASSWORD/DB (like the old webhook's default);
-    skipped otherwise — run by CI."""
     import os
 
     if not os.environ.get("POSTGRES_HOST"):
@@ -104,99 +218,9 @@ def test_migrations_roundtrip_postgres():
     try:
         eng = create_engine(url)
         with eng.connect() as c:
-            cols = [
-                r[0]
-                for r in c.execute(
-                    text(
-                        "SELECT column_name FROM information_schema.columns "
-                        "WHERE table_name='records'"
-                    )
-                )
-            ]
-        assert "properties" not in cols
+            tables = {r[0] for r in c.execute(
+                text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+            )}
+        assert {"eventic_log", "eventic_head", "eventic_outbox"} <= tables
     finally:
         command.downgrade(cfg, "base")
-
-
-def test_old_library_row_hydrates_after_fold(tmp_path, clean):
-    url = f"sqlite:///{tmp_path / 'old.db'}"
-    rid = _old_schema_and_row(url)
-
-    command.upgrade(_cfg(url), "head")
-
-    # the new schema has no properties column
-    eng = create_engine(url)
-    with eng.connect() as c:
-        cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
-    assert "properties" not in cols
-    eng.dispose()
-
-    connect(url)
-    story = Story.get(rid)
-    assert story.title == "old story"
-    assert story.version == 0
-    assert story.meta == {"record_type": "Story", "status": "published"}  # folded
-
-
-def test_upgrade_downgrade_roundtrip_sqlite(tmp_path, clean):
-    url = f"sqlite:///{tmp_path / 'rt.db'}"
-    command.upgrade(_cfg(url), "head")
-    eng = create_engine(url)
-    with eng.connect() as c:
-        cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
-    assert "properties" not in cols
-    eng.dispose()
-
-    # one step down re-adds properties (fold's downgrade)
-    command.downgrade(_cfg(url), "a1b2c3d4e5f6")
-    with eng.connect() as c:
-        cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
-    assert "properties" in cols
-    eng.dispose()
-
-    # and back up
-    command.upgrade(_cfg(url), "head")
-    with eng.connect() as c:
-        cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
-    assert "properties" not in cols
-    eng.dispose()
-
-
-def test_downgrade_rebuilds_properties_from_meta(tmp_path, clean):
-    url = f"sqlite:///{tmp_path / 'dt.db'}"
-    rid = _old_schema_and_row(url)
-    command.upgrade(_cfg(url), "head")
-
-    # simulate a 0.2-written row (data.meta only, no properties column)
-    eng = create_engine(url)
-    with Session(eng) as s:
-        s.execute(
-            text(
-                "INSERT INTO records (version_id, id, version, class_type, "
-                "created_ts, data) VALUES "
-                "(:version_id, :id, 0, 'Note', :created_ts, :data)"
-            ),
-            {
-                "version_id": uuid.uuid4().hex,
-                "id": uuid.uuid4().hex,
-                "created_ts": datetime.now(timezone.utc).isoformat(),
-                "data": json.dumps(
-                    {"id": str(uuid.uuid4()), "version": 0,
-                     "meta": {"status": "draft"}, "title": "n"}
-                ),
-            },
-        )
-        s.commit()
-    eng.dispose()
-
-    command.downgrade(_cfg(url), "a1b2c3d4e5f6")
-    eng2 = create_engine(url)
-    with eng2.connect() as c:
-        metas = c.execute(text("SELECT properties FROM records ORDER BY version")).scalars().all()
-    eng2.dispose()
-    # every row's properties was rebuilt from data.meta (raw TEXT: JSON is stored
-    # as text in SQLite and decoded by the ORM JSON type on typed reads)
-    parsed = [json.loads(m) for m in metas]
-    assert all(isinstance(m, dict) for m in parsed)
-    assert any(m.get("status") == "draft" for m in parsed)  # the 0.2 row's meta
-    assert any(m.get("status") == "published" for m in parsed)  # the 0.1 row folded

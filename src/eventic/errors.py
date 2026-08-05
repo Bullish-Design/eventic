@@ -1,10 +1,9 @@
 """Eventic error hierarchy.
 
-All library-raised exceptions derive from :class:`EventicError` so callers can
-catch one base type. The names below are the *contract*: ``StaleVersionError``
-(I5 loud conflicts), ``PluginConflictError`` (two providers on one exclusive
-seam, raised at class definition), ``MissingCapability`` (an unmet ``requires``
-token), and ``NotConnected`` (using the store before ``connect()``).
+Every library-raised exception derives from :class:`EventicError`, so callers
+can catch one base type. ``RecordNotFound`` also subclasses ``KeyError`` so
+``except KeyError`` keeps working (F15). ``Veto`` is exported from the package
+root (F12).
 """
 
 
@@ -13,7 +12,19 @@ class EventicError(Exception):
 
 
 class NotConnected(EventicError):
-    """Raised when the engine registry is empty — call ``connect(url)`` first."""
+    """No ``Store`` is active — call ``eventic.connect(url)`` or use a
+    ``Store`` context manager first."""
+
+
+class RecordNotFound(EventicError, KeyError):
+    """An aggregate (or exact version) does not exist (F15)."""
+
+    def __init__(self, cls_name: str, rec_id, version: int | None = None):
+        suffix = f" v{version}" if version is not None else ""
+        super().__init__(f"{cls_name} {rec_id}{suffix} not found")
+        self.cls_name = cls_name
+        self.rec_id = rec_id
+        self.version = version
 
 
 class StaleVersionError(EventicError):
@@ -30,9 +41,26 @@ class StaleVersionError(EventicError):
         self.version = version
 
 
-class PluginConflictError(EventicError):
-    """Two providers attached to one *exclusive* seam — at class definition."""
+class StreamCollision(EventicError):
+    """Two classes claimed the same stream name (F13). One stream, one class."""
 
 
-class MissingCapability(EventicError):
-    """A plugin's ``requires`` tokens are not satisfied by the assembled set."""
+class HandlerCollision(EventicError):
+    """Two functions registered under the same ``module:qualname`` (F22)."""
+
+
+class SeamMismatch(EventicError):
+    """A codec requires a store capability the chosen rows provider lacks
+    (e.g. ``Delta`` requires a JSON-shaped store). Raised at class definition."""
+
+
+class ConfigError(EventicError):
+    """An invalid ``on_commit``/class configuration."""
+
+
+class UsageError(EventicError):
+    """A public API misused (e.g. ``save()`` on a version != 0)."""
+
+
+class Veto(EventicError):
+    """Raise from an interceptor's ``before_commit`` to abort a write."""

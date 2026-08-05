@@ -1,39 +1,58 @@
 """eventic — versioned Pydantic aggregates whose history is an event stream.
 
-Pure-Python core (pydantic + SQLAlchemy only, I6); durable async (DBOS), diff
-storage, and typed columns are opt-in plugins (``eventic[dbos]`` / the plugin
-seams). Importing this package never imports ``dbos`` or ``fastapi`` — the
-optional adapter (``from eventic.dbos import ...``) is always an explicit
-import (D17: a "conditional import if installed" would put dbos in
-``sys.modules`` for everyone who has it installed, breaking the I6 contract).
+Pure-Python core (pydantic + SQLAlchemy only, I6); delta storage, durable
+delivery, and alternative stores are opt-in. Importing this package never
+imports ``dbos`` or ``fastapi`` — the optional driver is always an explicit
+import (``from eventic.contrib import dbos``).
+
+The public surface (CONCEPT §8): the core is the smallest implementation that
+upholds the invariants and runs the pipeline. Roughly a third of 0.2's surface
+was speculative and is deleted outright (F8/F12).
 """
 
-from .connect import connect
+from .codec.delta import Delta
+from .codec.snapshot import Snapshot
+from .dispatch.outbox import OutboxDispatcher
 from .errors import (
+    ConfigError,
     EventicError,
-    MissingCapability,
+    HandlerCollision,
     NotConnected,
-    PluginConflictError,
+    RecordNotFound,
+    SeamMismatch,
     StaleVersionError,
+    StreamCollision,
+    UsageError,
+    Veto,
 )
-from .events import on_commit
-from .plugins import Plugin, Seam, use
-from .plugins.codec import DiffStorage
-from .record import Record
+from .identity import version_id
+from .interceptors import Interceptor
+from .record import Draft, Record
+from .store import Store, active_store, connect
+from .subscribe import on_commit
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Record",
+    "Draft",
     "connect",
+    "Store",
+    "active_store",
     "on_commit",
-    "use",
-    "DiffStorage",
-    "Plugin",
-    "Seam",
-    "StaleVersionError",
-    "PluginConflictError",
-    "MissingCapability",
-    "NotConnected",
+    "version_id",
+    "Snapshot",
+    "Delta",
+    "Interceptor",
+    "Veto",
+    "OutboxDispatcher",
     "EventicError",
+    "NotConnected",
+    "RecordNotFound",
+    "StaleVersionError",
+    "StreamCollision",
+    "HandlerCollision",
+    "SeamMismatch",
+    "ConfigError",
+    "UsageError",
 ]

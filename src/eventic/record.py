@@ -1,112 +1,73 @@
-"""``Record`` — a plain Pydantic v2 model that becomes a versioned aggregate.
+"""``Record`` and ``Draft`` — frozen values, explicit writes (CONCEPT §6).
 
-Pure construction (I3): ``Todo(...)`` validates and assigns identity *in
-memory only* — no I/O, no events, no auto-persist. Writes are explicit:
-``save`` (v0), ``update`` (new version, original untouched), ``edit``
-(batched, Step 4), ``commit`` (low-level next version). ``version_id`` is the
-deterministic ``uuid5`` of ``(id, version)`` for **every** version including
-v0 (I4, closes R-C2). Reads: ``get``/``history``/``where``.
+A ``Record`` is one immutable version — construction is pure (I3), nothing is
+written until ``save``/``update``/``draft().commit()`` (I2). ``frozen=True``
+and ``extra="forbid"`` make I1 and I3 pydantic-enforced (F14) and delete every
+``object.__setattr__`` workaround of v2 — including the ``hair_trigger`` flag
+whose only purpose was disabling I2.
 
-No metaclass, no singleton, no copy-on-write ``__setattr__``. The three
-exclusive seam defaults are wired as class attributes (Step 6 replaces them
-with the assembled plugin set).
+``Draft`` is the only mutation affordance: ``record.draft()`` yields a mutable
+scratch copy; ``draft.commit()`` writes one new version and **returns it**
+(F6) — every write returns the new value; nothing mutates in place.
 """
 
 from __future__ import annotations
 
 import uuid
-from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, ClassVar, Iterator, Self
+from typing import Any, ClassVar, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import pipeline
-from .plugins import Plugin, assemble
-from .plugins.codec import FullSnapshot
-from .plugins.identity import Uuid5Deterministic, _uuid5
-from .plugins.persistence import SingleTableJSONB
+from .config import DEFAULT_CONFIG, resolve_config
+from .errors import UsageError
+from .identity import version_id
 
-
-class _EditProxy:
-    """In-memory scratch namespace for ``edit()`` — attribute sets land on a
-    draft copy, never on the object and never on the database (I2/I3).
-    Nested mutation (``e.meta["k"] = v``) works because the draft is a real
-    dict copy."""
-
-    def __init__(self, draft: dict):
-        object.__setattr__(self, "_draft", draft)
-
-    def __getattr__(self, name: str):
-        try:
-            return object.__getattribute__(self, "_draft")[name]
-        except (KeyError, AttributeError) as exc:
-            raise AttributeError(name) from exc
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name.startswith("_"):
-            object.__setattr__(self, name, value)
-        else:
-            object.__getattribute__(self, "_draft")[name] = value
-
-
-def _field_changes(before: dict, after: dict) -> dict:
-    """Top-level fields whose value actually changed (deep ``==``)."""
-    return {k: v for k, v in after.items() if before.get(k) != v}
+MANAGED = frozenset({"id", "version", "version_id", "created_ts"})
 
 
 class Record(BaseModel):
     """Base class — construction is pure; persistence is explicit."""
 
-    model_config = {"extra": "allow", "arbitrary_types_allowed": True}  # NOT frozen
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)  # stable aggregate identity
     version: int = 0
-    version_id: uuid.UUID | None = None  # deterministic (I4); None until stamped
-    created_ts: datetime | None = None
+    version_id: uuid.UUID | None = None  # deterministic (I4); derived, never client-set
+    created_ts: datetime | None = None  # commit metadata; stamped at hydration (F5)
     meta: dict[str, Any] = Field(default_factory=dict)  # free-form metadata bag
 
-    # exclusive-seam defaults (the null plugins, CONCEPT §7). Each subclass's
-    # set is validated and attached by ``assemble`` at class definition (Step 6)
-    _persistence: ClassVar[SingleTableJSONB] = SingleTableJSONB()
-    _codec: ClassVar[FullSnapshot] = FullSnapshot()
-    _identity: ClassVar[Uuid5Deterministic] = Uuid5Deterministic()
-    _interceptors: ClassVar[list] = []
+    # class-level declarations (dunder names: never model fields)
+    __eventic__ = DEFAULT_CONFIG
+    __subscriptions__: ClassVar[list] = []
 
-    def __init_subclass__(cls, hair_trigger: bool = False, **kwargs):
-        super().__init_subclass__(**kwargs)
-        # the class assembler: validate every plugin base at class definition
-        # (never at import, never at first call) and attach the seam providers
-        plugins = [b for b in cls.__bases__ if isinstance(b, type) and issubclass(b, Plugin)]
-        assemble(cls, plugins)
-        if hair_trigger:
-            # THE scripting escape hatch — re-enables the old implicit writes
-            # behind an explicit flag. Scripts only; violates I2 (documented).
-            cls._hair_trigger = True
+    def __init_subclass__(
+        cls,
+        *,
+        stream: str | None = None,
+        rows=None,
+        codec=None,
+        interceptors=None,
+        **kw,
+    ):
+        super().__init_subclass__()  # pydantic's takes no kwargs
+        cls.__eventic__ = resolve_config(
+            cls, stream=stream, rows=rows, codec=codec, interceptors=interceptors
+        )
+        cls.__subscriptions__ = []  # per-class; inherited via MRO walk
 
-            def __setattr__(self, name: str, value: Any) -> None:
-                BaseModel.__setattr__(self, name, value)  # pydantic validates
-                if name.startswith("_") or name in ("id", "version", "version_id"):
-                    return
-                if getattr(self, "_hair_live", False):
-                    self._hair_commit()
-
-            cls.__setattr__ = __setattr__
-
-    def _hair_commit(self) -> None:
-        """Persist the current in-memory state as the next version and reflect
-        it back (hair_trigger only)."""
-        new = self.update()
-        for f in new.__class__.model_fields:
-            object.__setattr__(self, f, getattr(new, f))
-        for k, v in (new.__pydantic_extra__ or {}).items():
-            object.__setattr__(self, k, v)
-
-    def model_post_init(self, _):
-        """PURE: stamp v0's deterministic identity only — never any I/O (I3)."""
-        if self.version_id is None:
-            object.__setattr__(self, "version_id", _uuid5(self.id, self.version))
-        object.__setattr__(self, "_hair_live", True)  # hair_trigger fires only post-construction
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_identity(cls, data):
+        """I4: version_id is always computed, never client-set. ``id``/``version``
+        default here so construction stays pure and hydration cannot override."""
+        if isinstance(data, dict):
+            data = dict(data)
+            data.setdefault("id", uuid.uuid4())
+            data.setdefault("version", 0)
+            data["version_id"] = version_id(data["id"], data["version"])
+        return data
 
     # ------------------------------------------------------------------ #
     # explicit writes (I2 — nothing else persists)
@@ -114,44 +75,37 @@ class Record(BaseModel):
     def save(self) -> Self:
         """Persist v0 explicitly. Byte-identical replays of ``(id, 0)`` are an
         idempotent no-op (I5); the aggregate keeps exactly one v0 row."""
-        pipeline.commit_version(type(self), new=self, prev=None, kind="create")
+        if self.version != 0:
+            raise UsageError("save() persists v0; use update() for later versions")
+        pipeline.commit(type(self), new=self, prev=None, kind="create")
         return self
 
     def update(self, **changes: Any) -> Self:
         """Validate a **new** version with ``changes`` applied and persist it.
-        Returns the new object; the original is untouched (R-C3). Managed
-        fields (id/version/version_id) are always derived, never client-set."""
-        data = self.model_dump(mode="python")
+        Returns the new object; the original is untouched. Managed fields are
+        always derived, never client-set."""
+        data = self.model_dump(mode="python", exclude=MANAGED)
         data.update(changes)
         data["id"] = self.id
         data["version"] = self.version + 1
-        data["version_id"] = _uuid5(self.id, data["version"])
-        data.pop("created_ts", None)  # the row's DB default stamps it
+        data["version_id"] = version_id(self.id, data["version"])
+        data.pop("created_ts", None)
         new = type(self)(**data)
-        pipeline.commit_version(type(self), new=new, prev=self, kind="update", delta=changes)
+        pipeline.commit(
+            type(self), new=new, prev=self, kind="update", changes=dict(changes)
+        )
         return new
 
-    @contextmanager
-    def edit(self) -> Iterator[_EditProxy]:
-        """Batch several field/nested edits into **one** new version (R-P1).
-        Collects changes in memory only; on clean exit a single ``update`` is
-        written. An empty/identical edit writes nothing (no-op guard)."""
-        box = _EditProxy(self.model_dump(mode="python"))
-        yield box
-        changes = _field_changes(self.model_dump(mode="python"), box._draft)
-        if changes:
-            self.update(**changes)
-
-    def commit(self) -> Self:
-        """Low-level: persist the current in-memory state as the next version."""
-        return self.update()
+    def draft(self) -> "Draft":
+        """A mutable scratch copy. Nothing is written until ``commit()``."""
+        return Draft(self)
 
     # ------------------------------------------------------------------ #
-    # reads (CONCEPT §6 read path)
+    # reads (CONCEPT §5 read path)
     # ------------------------------------------------------------------ #
     @classmethod
     def get(cls, rec_id: uuid.UUID, version: int | None = None) -> Self:
-        """Exact ``version`` (default latest). Loud ``KeyError`` if absent."""
+        """Exact ``version`` (default latest). Loud ``RecordNotFound`` if absent."""
         return pipeline.read(cls, rec_id, version=version)
 
     @classmethod
@@ -161,7 +115,41 @@ class Record(BaseModel):
 
     @classmethod
     def where(cls, **filters: Any) -> list[Self]:
-        """Latest records whose reconstructed head matches every (dotted-path)
-        key/value pair. Scoped to this class (``class_type``); a JSONB
-        convenience (R-P2). Codec-aware via ``pipeline.where``."""
+        """Latest records whose head matches every (dotted-path) key/value."""
         return pipeline.where(cls, **filters)
+
+
+class Draft:
+    """Mutable scratch copy of a ``Record``. ``commit()`` returns the NEW
+    version — assignment is the point (F6). No context-manager form exists,
+    deliberately: a ``with`` block cannot return a value, which is precisely
+    the mechanism that stranded v2 callers on a stale handle."""
+
+    def __init__(self, base: Record):
+        object.__setattr__(self, "_base", base)
+        object.__setattr__(self, "_data", base.model_dump(mode="python"))
+
+    def __getattr__(self, name: str):
+        try:
+            return self._data[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+        else:
+            self._data[name] = value
+
+    def _changes(self) -> dict[str, Any]:
+        before = self._base.model_dump(mode="python")
+        return {
+            k: v
+            for k, v in self._data.items()
+            if k not in MANAGED and before.get(k) != v
+        }
+
+    def commit(self) -> Record:
+        """Write one new version from the scratch state and return it."""
+        changes = self._changes()
+        return self._base if not changes else self._base.update(**changes)
