@@ -48,6 +48,10 @@ def _build_parser() -> argparse.ArgumentParser:
     intents_sub = intents.add_subparsers(dest="action", required=True)
     intents_list = intents_sub.add_parser("list")
     intents_list.add_argument("--status", choices=["pending", "leased", "dead"])
+    intents_list.add_argument("--limit", type=int, help="page size")
+    intents_list.add_argument(
+        "--cursor", help="opaque page cursor from a previous list"
+    )
     redrive = intents_sub.add_parser("redrive")
     redrive.add_argument("--subscription", required=True)
 
@@ -95,7 +99,9 @@ def _dispatch(args: argparse.Namespace, app: Any) -> int:
     if key == "worker":
         return handler(app, args.url, queue=args.queue, once=args.once)
     if key == "intents.list":
-        return handler(app, args.url, status=args.status)
+        return handler(
+            app, args.url, status=args.status, limit=args.limit, cursor=args.cursor
+        )
     if key == "intents.redrive":
         return handler(app, args.url, subscription=args.subscription)
     return handler(app, args.url)

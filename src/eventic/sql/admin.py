@@ -7,12 +7,13 @@ backing) cannot survive a rebuild because the scope is deleted first.
 
 from __future__ import annotations
 
+import base64
 import json
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 
 from eventic.app import App
 from eventic.errors import StoreError
@@ -30,10 +31,20 @@ def _loads(value: Any) -> Any:
     return json.loads(value)
 
 
-def _accumulate(final: dict[tuple[str, UUID], dict[str, Any]], row: Any) -> None:
-    """Fold one log row into the persistent per-aggregate document state."""
-    key = (row["stream"], row["aggregate_id"])
-    doc = final.setdefault(key, {})
+def _decode_intent_cursor(cursor: str) -> tuple[datetime, UUID]:
+    """Opaque ``list_intents`` cursor -> ``(created_at, intent_id)``."""
+    raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+    created_at_iso, intent_id = json.loads(raw)
+    return datetime.fromisoformat(created_at_iso), UUID(intent_id)
+
+
+def _encode_intent_cursor(created_at: datetime, intent_id: UUID) -> str:
+    payload = json.dumps([created_at.isoformat(), str(intent_id)])
+    return base64.urlsafe_b64encode(payload.encode()).decode()
+
+
+def _accumulate_into(doc: dict[str, Any], row: Any) -> None:
+    """Fold one log row into an in-flight per-aggregate document."""
     if row["encoding"] == "snapshot/1":
         doc.clear()
         doc.update(_loads(row["payload"]))
@@ -50,23 +61,45 @@ def _accumulate(final: dict[tuple[str, UUID], dict[str, Any]], row: Any) -> None
 
 
 def _stream_log(
-    conn: Any, store: SQLite, stream: str | None, chunk: int
-) -> dict[tuple[str, UUID], dict[str, Any]]:
-    """Read the whole log in chunks, decoding incrementally across boundaries."""
-    final: dict[tuple[str, UUID], dict[str, Any]] = {}
-    offset = 0
+    conn: Any,
+    store: SQLite,
+    stream: str | None,
+    chunk: int,
+    *,
+    emit: Any,
+) -> None:
+    """Fold the whole log in ``(stream, aggregate_id, revision)`` order,
+    calling ``emit(key, doc)`` once per completed aggregate.
+
+    The log is already ordered so that one aggregate's rows are contiguous;
+    a document is finalised and released the moment the aggregate key
+    changes. Peak memory is one in-flight document plus one chunk of rows —
+    independent of the number of aggregates (F5). ``emit`` is a callback,
+    not a generator: nothing lazy crosses any boundary.
+    """
+    current: tuple[str, UUID] | None = None
+    doc: dict[str, Any] = {}
+    after: Any = None
     while True:
         rows = (
-            conn.execute(st.select_all_log_for(stream, chunk=chunk, offset=offset))
+            conn.execute(st.select_all_log_for(stream, chunk=chunk, after=after))
             .mappings()
             .all()
         )
         if not rows:
             break
-        offset += len(rows)
+        after = (rows[-1]["stream"], rows[-1]["aggregate_id"], rows[-1]["revision"])
         for row in rows:
-            _accumulate(final, row)
-    return final
+            key = (row["stream"], row["aggregate_id"])
+            if current is None:
+                current = key
+            if key != current:
+                emit(current, doc)
+                current = key
+                doc = {}
+            _accumulate_into(doc, row)
+    if current is not None:
+        emit(current, doc)
 
 
 def _last_row(conn: Any, store: SQLite, key: tuple[str, UUID]) -> Any:
@@ -138,20 +171,27 @@ class SqlAdmin(StoreAdmin):
         mismatches = 0
         rebuilt = 0
         streams: set[str] = set()
+        emitted_keys: set[tuple[str, UUID]] = set()
         with engine.begin() as conn:
-            deleted = conn.execute(st.select_all_heads_for(stream)).mappings().all()
-            head_keys = {(h["stream"], h["aggregate_id"]) for h in deleted}
-            log = _stream_log(conn, self._store, stream, chunk)
-            streams.update(key[0] for key in log)
-            orphans = len(head_keys - set(log))
+            # Stream the existing heads: the orphan check needs only the key
+            # tuples, so do not materialize the full row objects (F5: peak is
+            # bounded by chunk + one aggregate's bookkeeping, not by the head
+            # count).
+            head_keys: set[tuple[str, UUID]] = set()
+            for row in conn.execute(st.select_all_heads_for(stream)).mappings():
+                head_keys.add((row["stream"], row["aggregate_id"]))
             conn.execute(st.delete_heads(stream))
-            for key, doc in log.items():
+
+            def emit(key: tuple[str, UUID], doc: dict[str, Any]) -> None:
+                nonlocal mismatches, rebuilt
+                emitted_keys.add(key)
+                streams.add(key[0])
                 from eventic.jsonx import canonical_bytes, digest
 
                 last = _last_row(conn, self._store, key)
                 if last is None or digest(canonical_bytes(doc)) != last["digest"]:
                     mismatches += 1
-                    continue
+                    return
                 conn.execute(
                     st.upsert_head(
                         self._store.dialect,
@@ -170,6 +210,9 @@ class SqlAdmin(StoreAdmin):
                     )
                 )
                 rebuilt += 1
+
+            _stream_log(conn, self._store, stream, chunk, emit=emit)
+            orphans = len(head_keys - emitted_keys)
         return RebuildReport(
             streams=tuple(sorted(streams)),
             rebuilt=rebuilt,
@@ -183,18 +226,22 @@ class SqlAdmin(StoreAdmin):
         mismatches = 0
         streams: set[str] = set()
         with engine.connect() as conn:
-            offset = 0
+            after: Any = None
             while True:
                 rows = (
                     conn.execute(
-                        st.select_all_log_for(stream, chunk=chunk, offset=offset)
+                        st.select_all_log_for(stream, chunk=chunk, after=after)
                     )
                     .mappings()
                     .all()
                 )
                 if not rows:
                     break
-                offset += len(rows)
+                after = (
+                    rows[-1]["stream"],
+                    rows[-1]["aggregate_id"],
+                    rows[-1]["revision"],
+                )
                 for row in rows:
                     streams.add(row["stream"])
                     checked += 1
@@ -206,8 +253,9 @@ class SqlAdmin(StoreAdmin):
 
                     if digest(canonical_bytes(doc)) != row["digest"]:
                         mismatches += 1
-            log = _stream_log(conn, self._store, stream, chunk)
-            for key, doc in log.items():
+
+            def emit(key: tuple[str, UUID], doc: dict[str, Any]) -> None:
+                nonlocal mismatches
                 from eventic.jsonx import canonical_bytes, digest
 
                 rebuilt_digest = digest(canonical_bytes(doc))
@@ -218,22 +266,52 @@ class SqlAdmin(StoreAdmin):
                 )
                 if live is None or live["digest"] != rebuilt_digest:
                     mismatches += 1
+
+            _stream_log(conn, self._store, stream, chunk, emit=emit)
         return VerifyReport(
             streams=tuple(sorted(streams)),
             revisions_checked=checked,
             mismatches=mismatches,
         )
 
-    def list_intents(self, *, status: str | None = None) -> list[dict[str, Any]]:
-        """Paged-listing support for ``eventic intents list``."""
+    def list_intents(
+        self,
+        *,
+        status: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Paged listing of delivery intents.
+
+        Ordered by ``(created_at, intent_id)`` — the immutable intent id keeps
+        the keyset stable across pages even when several intents share a
+        timestamp (R12). The returned cursor is opaque; pass it back to page
+        on. ``limit`` bounds the page; without it the whole table is returned
+        for backwards-compatible callers.
+        """
         from eventic.sql.tables import eventic_intent as intents_t
 
-        stmt = select(intents_t).order_by(intents_t.c.created_at)
+        stmt = select(intents_t).order_by(intents_t.c.created_at, intents_t.c.intent_id)
         if status is not None:
             stmt = stmt.where(intents_t.c.status == status)
+        if cursor is not None:
+            created_at, intent_id = _decode_intent_cursor(cursor)
+            stmt = stmt.where(
+                tuple_(intents_t.c.created_at, intents_t.c.intent_id)
+                > (created_at, intent_id)
+            )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         with self._store.engine.connect() as conn:
             rows = conn.execute(stmt).mappings().all()
-        return [dict(row) for row in rows]
+        out = [dict(row) for row in rows]
+        next_cursor: str | None = None
+        if limit is not None and len(out) == limit:
+            last = out[-1]
+            next_cursor = _encode_intent_cursor(
+                _parse_db_datetime(last["created_at"]), last["intent_id"]
+            )
+        return out, next_cursor
 
     def redrive(self, subscription_id: str) -> int:
         """Move dead intents of one subscription back to pending."""

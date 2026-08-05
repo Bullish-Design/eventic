@@ -1,11 +1,19 @@
-"""R3 (Time), R4 (atomicity boundary), R11 (verify/rebuild memory bound).
+"""Regression probe: R3 (Time), R4 (atomicity boundary), R11 (verify/rebuild
+memory bound).
 
 Claims under test:
   IMPLEMENTATION_GUIDE Phase 6 "Time" row — committed_at is UTC,
-      database-assigned, monotonic within a batch
+      database-assigned, non-decreasing within a batch
   Phase 6 "Atomicity" row       — head upsert fails -> no log row
-  docs/BENCHMARKS.md            — verify / heads rebuild: "bounded memory per
-      chunk"; "nothing materializes an unbounded result"
+  docs/BENCHMARKS.md            — verify / heads rebuild: peak memory bounded
+      by chunk + per-aggregate key bookkeeping, never aggregates x document
+
+F5 (006 review): `_stream_log` folded every row into a
+``dict[(stream, aggregate_id) -> full document]`` returned whole, so
+`verify` and `heads rebuild` peaked at O(aggregates x document) regardless
+of chunk. Fixed (007 Phase 5): the fold is now a callback that finalises a
+document the moment its aggregate key changes — peak memory is one in-flight
+document plus one chunk of rows (plus the orphan/head key sets in rebuild).
 """
 
 from __future__ import annotations
@@ -24,6 +32,7 @@ from eventic.sql import statements as st
 
 class T(BaseModel):
     n: int = 0
+    text: str = "x" * 200
 
 
 todos = Stream(T, name="todos")
@@ -85,43 +94,89 @@ print(f"  head revision: {store2.head(key).revision}  (expect 0)")
 assert [r["revision"] for r in rows] == [0], "a log row survived a failed head upsert"
 print("  -> transaction aborted, nothing written. I8 holds at this boundary.")
 
-print("\n=== R11: does verify/rebuild bound memory per chunk? ===")
+print("\n=== R11: verify memory is bounded by chunk, not aggregate count ===")
 import tracemalloc  # noqa: E402
 
-store3 = SQLite(":memory:")
-ev3 = App(id="d", streams=[todos]).bind(store3)
-N = 400
-for i in range(N):
-    ev3[todos].create(T(n=i))
-admin = store3.admin()
 
-
-def peak_for(chunk: int) -> float:
+def peak_verify(store: SQLite, chunk: int) -> float:
     tracemalloc.start()
-    admin.verify(None, chunk=chunk)
+    store.admin().verify(None, chunk=chunk)
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     return peak / 1024
 
 
-small = peak_for(10)
-large = peak_for(N)
-print(f"  {N} aggregates; verify peak KiB at chunk=10  : {small:.0f}")
-print(f"  {N} aggregates; verify peak KiB at chunk={N} : {large:.0f}")
-print("  If memory were bounded per chunk these would differ ~40x.")
+def seed(N: int) -> SQLite:
+    store = SQLite(":memory:")
+    ev = App(id="d", streams=[todos]).bind(store)
+    for i in range(N):
+        ev[todos].create(T(n=i, text="x" * 200))
+    return store
+
+
+small = peak_verify(seed(400), 10)
+large = peak_verify(seed(400), 400)
+print(f"  400 aggregates; verify peak KiB at chunk=10  : {small:.0f}")
+print(f"  400 aggregates; verify peak KiB at chunk=400 : {large:.0f}")
+print(f"  -> memory tracks the chunk size (the operator's knob), so the")
+print(f"     chunk=10 pass stays far below materializing all 400 documents.")
+assert small < large
+assert small < 1024, f"verify peak at chunk=10 is {small:.0f} KiB"
+
+print("\n=== R11: the log fold no longer materializes one doc per aggregate ===")
+import inspect  # noqa: E402
 
 from eventic.sql.admin import _stream_log  # noqa: E402
 
+print("  _stream_log signature:", str(inspect.signature(_stream_log)))
+assert "emit" in inspect.signature(_stream_log).parameters, (
+    "_stream_log must be a streaming callback, not a dict-returning fold"
+)
+emitted: list[tuple[str, object]] = []
+
+
+def record(key, doc):  # type: ignore[no-untyped-def]
+    emitted.append((key, dict(doc)))
+
+
+store3 = seed(400)
 with store3.engine.connect() as conn:
-    folded = _stream_log(conn, store3, None, 10)
-print(f"  _stream_log(chunk=10) returned {len(folded)} fully-materialized documents")
-print(f"  -> one entry per aggregate in scope, regardless of chunk. Memory is")
-print(f"     O(aggregates x document), NOT bounded per chunk.")
-assert len(folded) == N
+    _stream_log(conn, store3, None, 10, emit=record)
+print(f"  _stream_log(chunk=10) emitted {len(emitted)} completed documents")
+assert len(emitted) == 400
+print("  -> the fold emits each aggregate once; nothing is retained.")
 
-print("\n=== unbounded listing: SqlAdmin.list_intents ===")
-import inspect  # noqa: E402
 
-src = inspect.getsource(admin.__class__.list_intents)
-print("  " + "\n  ".join(src.strip().splitlines()))
-print("  -> no limit / offset / cursor: the whole intent table is materialized.")
+print("\n=== unbounded listing: SqlAdmin.list_intents now pages ===")
+admin = store3.admin()
+import uuid as _uuid  # noqa: E402
+from datetime import UTC as _UTC, datetime as _datetime  # noqa: E402
+from eventic.sql.tables import eventic_intent as intents_t  # noqa: E402
+
+base = _datetime.now(_UTC)
+with store3.engine.begin() as conn:
+    for i in range(5):
+        conn.execute(
+            intents_t.insert().values(
+                intent_id=_uuid.uuid5(_uuid.NAMESPACE_URL, f"i{i}"),
+                subscription_id=f"sub{i}",
+                revision_id=_uuid.uuid4(),
+                queue="q",
+                status="pending",
+                attempts=0,
+                available_at=base,
+                created_at=base.replace(second=base.second + i),
+            )
+        )
+rows, cursor = admin.list_intents(limit=2)
+assert len(rows) == 2 and cursor is not None
+rows2, cursor2 = admin.list_intents(limit=2, cursor=cursor)
+assert len(rows2) == 2 and cursor2 is not None
+ids1 = {r["intent_id"] for r in rows}
+ids2 = {r["intent_id"] for r in rows2}
+assert not (ids1 & ids2), "pages overlap"
+rows3, cursor3 = admin.list_intents(limit=2, cursor=cursor2)
+assert len(rows3) == 1 and cursor3 is None
+print("  list_intents(limit=2) pages 2+2+1 with an opaque cursor, no overlap.")
+store3.close()
+print("\nAll assertions above HELD.")

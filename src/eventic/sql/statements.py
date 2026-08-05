@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, tuple_, update
 
 from eventic.sql.dialect import Dialect
 from eventic.sql.tables import (
@@ -215,13 +215,25 @@ def select_all_heads_for(stream: str | None) -> Any:
     return stmt.order_by(heads.c.stream, heads.c.aggregate_id)
 
 
-def select_all_log_for(stream: str | None, *, chunk: int, offset: int) -> Any:
-    stmt = select(revisions).order_by(
-        revisions.c.stream, revisions.c.aggregate_id, revisions.c.revision
-    )
+def select_all_log_for(stream: str | None, *, chunk: int, after: Any) -> Any:
+    """The next chunk of the log in ``(stream, aggregate_id, revision)`` order.
+
+    Keyset paging on the ordering tuple itself (not ``OFFSET``, which is
+    ``O(n^2)`` over a large log): ``after`` is the last row of the previous
+    chunk, or ``None`` for the first chunk. The key columns are immutable in
+    the log, so the paging is stable (R12).
+    """
+    stmt = select(revisions)
     if stream is not None:
         stmt = stmt.where(revisions.c.stream == stream)
-    return stmt.offset(offset).limit(chunk)
+    if after is not None:
+        stmt = stmt.where(
+            tuple_(revisions.c.stream, revisions.c.aggregate_id, revisions.c.revision)
+            > after
+        )
+    return stmt.order_by(
+        revisions.c.stream, revisions.c.aggregate_id, revisions.c.revision
+    ).limit(chunk)
 
 
 def delete_heads(stream: str | None) -> Any:

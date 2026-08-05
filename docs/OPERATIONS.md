@@ -11,7 +11,7 @@ usage/config error, `3` drift detected.
 | `eventic heads rebuild [--stream S] [--chunk N]` | truncate the scope in-transaction, rebuild heads from the log, compare digests |
 | `eventic verify [--stream S] [--chunk N]` | stream the log in chunks, reconstruct every revision, compare against stored digests, compare rebuilt heads to live heads |
 | `eventic worker --queue Q [--once]` | drain the queue; prints `WorkerReport`; exit 1 if any intent dead-lettered |
-| `eventic intents list [--status dead]` | paged listing of delivery intents |
+| `eventic intents list [--status dead] [--limit N] [--cursor C]` | paged listing of delivery intents; pass `--limit` to page, `--cursor` from the previous page's `# next cursor` line |
 | `eventic intents redrive --subscription ID` | move dead intents of one subscription back to pending |
 | `eventic inspect` | the resolved app: streams, schema versions, fingerprints, subscriptions with delivery and queue, store capabilities |
 

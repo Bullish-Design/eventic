@@ -104,16 +104,27 @@ def worker(app: App, url: str, *, queue: str, once: bool, out: Any = sys.stdout)
 
 
 def intents_list(
-    app: App, url: str, *, status: str | None, out: Any = sys.stdout
+    app: App,
+    url: str,
+    *,
+    status: str | None,
+    limit: int | None,
+    cursor: str | None,
+    out: Any = sys.stdout,
 ) -> int:
     store, admin = _store_and_admin(app, url)
     try:
-        for row in admin.list_intents(status=status):
+        rows, next_cursor = admin.list_intents(
+            status=status, limit=limit, cursor=cursor
+        )
+        for row in rows:
             print(
                 f"{row['intent_id']} {row['subscription_id']} {row['queue']} "
                 f"{row['status']} attempts={row['attempts']}",
                 file=out,
             )
+        if next_cursor:
+            print(f"# next cursor: {next_cursor}", file=out)
         return EXIT_OK
     finally:
         store.close()

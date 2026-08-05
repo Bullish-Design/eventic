@@ -22,11 +22,14 @@ matrix prints the same table against a live service).
 | `get(id, revision=n)` | one window | ≤ `K + 1` rows for `delta/1` (`K = every`), `1` for `snapshot/1` |
 | `history(id, limit=L)` | `L` decoded revisions | `O(L)` rows read, each bounded by `K` |
 | `where(...)` | indexed head scan | paged, `limit` rows per page |
-| `verify` / `heads rebuild` | chunked log stream | `O(total rows)`, bounded memory per chunk |
+| `verify` / `heads rebuild` | chunked log stream, per-aggregate fold | `O(total rows)` I/O; peak memory ≈ one in-flight document + one chunk of rows, plus `O(aggregates)` key bookkeeping (heads to rebuild, orphan keys) |
 | `worker` drain | claim + deliver + settle | `batch_size` intents per pass |
 
-`history`, `where`, and `verify` are paged/chunked; nothing materializes an
-unbounded result.
+`history`, `where`, and `verify` are paged/chunked; `intents list` is paged
+with an opaque cursor. The log fold in `verify` / `heads rebuild` finalises
+each aggregate's document the moment its key changes, so it never holds one
+document per aggregate — memory is bounded by the chunk size and the number
+of aggregates' *keys*, never by `aggregates × document`.
 
 ## Notes
 
