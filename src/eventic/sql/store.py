@@ -72,6 +72,7 @@ class SQLite(Store):
         url_or_path: str,
         *,
         encodings: Mapping[str, Encoding] | None = None,
+        create_tables: bool = True,
     ) -> None:
         if "://" not in url_or_path:
             url_or_path = f"sqlite:///{url_or_path}"
@@ -88,7 +89,8 @@ class SQLite(Store):
         else:
             self.engine = create_engine(url_or_path)
         self._install_events()
-        self._create_tables()
+        if create_tables:
+            self._create_tables()
 
     def _install_events(self) -> None:
         @sa_event.listens_for(self.engine, "connect")
@@ -685,12 +687,14 @@ class Postgres(SQLite):
         url: str,
         *,
         encodings: Mapping[str, Encoding] | None = None,
+        create_tables: bool = True,
     ) -> None:
         self.dialect = Dialect(name="postgresql", capabilities=POSTGRES_CAPABILITIES)
         self._encodings = dict(encodings or {})
         self.engine = create_engine(url)
         self._install_events()
-        self._create_tables()
+        if create_tables:
+            self._create_tables()
 
     def _install_events(self) -> None:
         pass  # Postgres uses its default isolation and row locking

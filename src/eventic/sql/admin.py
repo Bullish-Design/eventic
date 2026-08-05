@@ -8,6 +8,7 @@ backing) cannot survive a rebuild because the scope is deleted first.
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from typing import Any, cast
 from uuid import UUID
 
@@ -222,6 +223,43 @@ class SqlAdmin(StoreAdmin):
             revisions_checked=checked,
             mismatches=mismatches,
         )
+
+    def list_intents(self, *, status: str | None = None) -> list[dict[str, Any]]:
+        """Paged-listing support for ``eventic intents list``."""
+        from eventic.sql.tables import eventic_intent as intents_t
+
+        stmt = select(intents_t).order_by(intents_t.c.created_at)
+        if status is not None:
+            stmt = stmt.where(intents_t.c.status == status)
+        with self._store.engine.connect() as conn:
+            rows = conn.execute(stmt).mappings().all()
+        return [dict(row) for row in rows]
+
+    def redrive(self, subscription_id: str) -> int:
+        """Move dead intents of one subscription back to pending."""
+        from datetime import datetime
+
+        from sqlalchemy import update
+
+        from eventic.sql.tables import eventic_intent as intents_t
+
+        now = datetime.now(UTC)
+        with self._store.engine.begin() as conn:
+            result = conn.execute(
+                update(intents_t)
+                .where(
+                    intents_t.c.subscription_id == subscription_id,
+                    intents_t.c.status == "dead",
+                )
+                .values(
+                    status="pending",
+                    attempts=0,
+                    available_at=now,
+                    leased_until=None,
+                    last_error=None,
+                )
+            )
+        return result.rowcount or 0
 
 
 def _decode_row(conn: Any, store: SQLite, row: Any) -> dict[str, Any] | None:
