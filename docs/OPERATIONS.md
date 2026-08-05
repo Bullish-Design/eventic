@@ -7,7 +7,7 @@ usage/config error, `3` drift detected.
 | Command | Behavior |
 |---|---|
 | `eventic schema upgrade` | run migrations (Alembic) |
-| `eventic schema check` | fingerprint and structural drift; exit 3 on drift |
+| `eventic schema check` | fingerprint and structural drift; read-only, never writes; exit 3 on drift, 0 otherwise (`no baseline recorded` streams print a warning and exit 0 — a missing baseline is not drift) |
 | `eventic heads rebuild [--stream S] [--chunk N]` | truncate the scope in-transaction, rebuild heads from the log, compare digests |
 | `eventic verify [--stream S] [--chunk N]` | stream the log in chunks, reconstruct every revision, compare against stored digests, compare rebuilt heads to live heads |
 | `eventic worker --queue Q [--once]` | drain the queue; prints `WorkerReport`; exit 1 if any intent dead-lettered |

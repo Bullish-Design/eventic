@@ -42,13 +42,27 @@ def schema_check(app: App, url: str, out: Any = sys.stdout) -> int:
     try:
         report = admin.check(app)
         for stream, version, declared, stored, ok in report.streams:
-            state = "ok" if ok else "DRIFT"
+            if stored is None:
+                # F12: a check must never define the baseline it verifies.
+                state = "no baseline recorded"
+            elif ok:
+                state = "ok"
+            else:
+                state = "DRIFT"
             print(
                 f"{stream} v{version}: declared={declared[:12]} "
-                f"stored={stored[:12]} {state}",
+                f"stored={(stored or '-')[:12]} {state}",
                 file=out,
             )
-        return EXIT_OK if not report.drift else EXIT_DRIFT
+        if report.drift:
+            return EXIT_DRIFT
+        if report.baseline_missing:
+            print(
+                "warning: no baseline recorded for some streams; "
+                "run a write before relying on this check",
+                file=out,
+            )
+        return EXIT_OK
     finally:
         store.close()
 

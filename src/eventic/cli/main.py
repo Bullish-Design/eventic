@@ -28,7 +28,10 @@ def _build_parser() -> argparse.ArgumentParser:
     schema = sub.add_parser("schema", help="schema operations")
     schema_sub = schema.add_subparsers(dest="action", required=True)
     schema_sub.add_parser("upgrade", help="run migrations")
-    schema_sub.add_parser("check", help="fingerprint drift check; exits 3 on drift")
+    schema_sub.add_parser(
+        "check",
+        help="fingerprint drift check; read-only; exits 3 on drift",
+    )
 
     heads = sub.add_parser("heads", help="head projection operations")
     heads_sub = heads.add_subparsers(dest="action", required=True)

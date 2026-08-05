@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import select, tuple_
 
 from eventic.app import App
 from eventic.errors import StoreError
@@ -130,11 +130,19 @@ class SqlAdmin(StoreAdmin):
         command.upgrade(cfg, "head")
 
     def check(self, app: App) -> SchemaReport:
+        """Compare declared fingerprints to the ledger. Read-only (F12).
+
+        A stream with no recorded baseline reports ``stored=None`` /
+        ``ok=None`` — a third state, distinct from clean and from drift —
+        because a first check on a never-written database must not *define*
+        the baseline it is supposed to verify. Drift is only detected once a
+        baseline exists.
+        """
         engine = self._store.engine
-        rows: list[tuple[str, int, str, str, bool]] = []
+        rows: list[tuple[str, int, str, str | None, bool | None]] = []
         drift = False
-        with engine.begin() as conn:
-            now = _parse_db_datetime(conn.execute(select(func.now())).scalar())
+        baseline_missing = False
+        with engine.connect() as conn:
             for stream in app.streams:
                 declared = stream.fingerprint
                 stored_row = (
@@ -145,26 +153,18 @@ class SqlAdmin(StoreAdmin):
                     .first()
                 )
                 if stored_row is None:
-                    conn.execute(
-                        st.upsert_fingerprint(
-                            self._store.dialect,
-                            {
-                                "stream": stream.name,
-                                "schema_version": stream.schema_version,
-                                "fingerprint": declared,
-                                "first_seen": now,
-                            },
-                        )
-                    )
+                    baseline_missing = True
                     rows.append(
-                        (stream.name, stream.schema_version, declared, declared, True)
+                        (stream.name, stream.schema_version, declared, None, None)
                     )
                     continue
                 stored = stored_row["fingerprint"]
                 ok = stored == declared
                 drift = drift or not ok
                 rows.append((stream.name, stream.schema_version, declared, stored, ok))
-        return SchemaReport(streams=tuple(rows), drift=drift)
+        return SchemaReport(
+            streams=tuple(rows), drift=drift, baseline_missing=baseline_missing
+        )
 
     def rebuild_heads(self, stream: str | None, *, chunk: int) -> RebuildReport:
         engine = self._store.engine

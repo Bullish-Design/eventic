@@ -36,12 +36,18 @@ class Capabilities:
 
 @dataclass(frozen=True)
 class SchemaReport:
-    """Result of ``eventic schema check``: fingerprint drift per stream."""
+    """Result of ``eventic schema check``: fingerprint drift per stream.
+
+    ``streams`` rows are ``(name, version, declared, stored, ok)`` where
+    ``stored`` is ``None`` when no baseline was ever recorded and ``ok`` is
+    then ``None`` too (a third state, distinct from clean and from drift).
+    """
 
     streams: tuple[
-        tuple[str, int, str, str, bool], ...
+        tuple[str, int, str, str | None, bool | None], ...
     ] = ()  # (name, version, declared, stored, ok)
     drift: bool = False
+    baseline_missing: bool = False
 
 
 @dataclass(frozen=True)

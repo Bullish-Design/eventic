@@ -129,11 +129,21 @@ def test_schema_check_clean_and_drift(tmp_path: Path) -> None:
 
 
 def test_schema_check_seeds_missing_ledger(tmp_path: Path) -> None:
+    """F12: on a never-written database check reports 'no baseline recorded'
+    — a third state, not clean — and writes nothing."""
     store, app = _seed(tmp_path, writes=0)
     admin = SqlAdmin(store)
     report = admin.check(app)
     assert not report.drift
-    assert report.streams[0][4] is True
+    assert report.baseline_missing is True
+    assert report.streams[0][4] is None  # ok is unknown, not True
+    assert report.streams[0][3] is None  # no stored fingerprint
+    # check must not write: the ledger is still empty
+    from sqlalchemy import text
+
+    with store.engine.connect() as conn:
+        row = conn.execute(text("SELECT COUNT(*) FROM eventic_schema")).scalar()
+    assert row == 0, "schema check wrote to the database"
     store.close()
 
 

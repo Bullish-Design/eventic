@@ -63,15 +63,25 @@ print("     missed — inherent to keyset paging, but the ordering is by UUID, s
 print("     'missed' is unpredictable rather than 'older than when I started'.")
 store.close()
 
-print("\n=== R8: does `schema check` seed and then pass? ===")
+print("\n=== R8: schema check is read-only and reports a missing baseline ===")
 store2 = SQLite(":memory:")
 app = App(id="d", streams=[items])
 admin2 = store2.admin()
 
 report1 = admin2.check(app)
-print(f"  check #1 on an empty database: drift={report1.drift}")
+print(f"  check #1 on an empty database: drift={report1.drift} "
+      f"baseline_missing={report1.baseline_missing}")
 for row in report1.streams:
-    print(f"    stream={row[0]} v{row[1]} declared={row[2][:12]}… stored={row[3][:12]}… ok={row[4]}")
+    print(f"    stream={row[0]} v{row[1]} declared={row[2][:12]}… "
+          f"stored={row[3]} ok={row[4]}")
+
+# the check wrote nothing: the ledger is still empty
+with store2.engine.connect() as conn:
+    n = conn.execute(
+        __import__("sqlalchemy").text("SELECT COUNT(*) FROM eventic_schema")
+    ).scalar()
+print(f"  ledger rows after check: {n}  (must stay 0 — F12 read-only)")
+assert n == 0
 
 # now declare a DIFFERENT model under the same name and version — real drift
 class ItemV2(BaseModel):
@@ -80,6 +90,15 @@ class ItemV2(BaseModel):
     added_without_a_version_bump: bool = False
 
 
+# seed a baseline the way a real write would, then check for drift
+with store2.engine.begin() as conn:
+    conn.execute(
+        __import__("sqlalchemy").text(
+            "INSERT INTO eventic_schema (stream, schema_version, fingerprint, "
+            "first_seen) VALUES ('items', 1, :fp, CURRENT_TIMESTAMP)"
+        ),
+        {"fp": app.streams[0].fingerprint},
+    )
 drifted = App(id="d", streams=[Stream(ItemV2, name="items")])
 report2 = admin2.check(drifted)
 print(f"  check #2 with a changed model, same schema_version: drift={report2.drift}")
@@ -87,13 +106,12 @@ for row in report2.streams:
     print(f"    declared={row[2][:12]}… stored={row[3][:12]}… ok={row[4]}")
 
 print()
-print("  -> check() INSERTS the declared fingerprint when the row is missing and")
-print("     reports ok=True. On a database that has never been written to, the")
-print("     first `eventic schema check` cannot detect drift — it defines the")
-print("     baseline. A read-only 'check' command that mutates the database is")
-print("     also a surprise for an operator running it against production.")
+print("  -> a check on a never-written database reports 'no baseline")
+print("     recorded' (a third state, exit 0 with a warning) and writes")
+print("     nothing. Drift IS detected once a baseline exists (check #2),")
+print("     so the deploy-time claim holds for any database that has been")
+print("     committed to.")
 assert report1.drift is False
+assert report1.baseline_missing is True
 assert report2.drift is True
-print("     Drift IS caught once a baseline exists (check #2), so the deploy-time")
-print("     claim holds for any database that has been committed to.")
 store2.close()

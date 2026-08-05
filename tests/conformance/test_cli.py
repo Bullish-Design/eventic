@@ -39,11 +39,27 @@ def url(tmp_path: Path) -> str:
 
 
 def test_schema_upgrade_and_check(url: str) -> None:
+    import sqlite3
+
     r = _run("schema", "upgrade", url=url)
     assert r.returncode == 0, r.stderr
+    # on a never-written database, check must not invent a baseline (F12):
+    # report the third state and exit 0 (missing baseline is not drift)
+    r_empty = _run("schema", "check", url=url)
+    assert r_empty.returncode == 0, r_empty.stderr
+    assert "no baseline recorded" in r_empty.stdout
+    # drift once a baseline exists
+    db = url.replace("sqlite:///", "")
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "INSERT INTO eventic_schema (stream, schema_version, fingerprint, "
+        "first_seen) VALUES ('todos', 1, 'wrong', CURRENT_TIMESTAMP)"
+    )
+    conn.commit()
+    conn.close()
     r2 = _run("schema", "check", url=url)
-    assert r2.returncode == 0, r2.stderr
-    assert "ok" in r2.stdout
+    assert r2.returncode == 3, r2.stdout
+    assert "DRIFT" in r2.stdout
 
 
 def test_inspect_reports_every_commit_relevant_fact(url: str) -> None:
