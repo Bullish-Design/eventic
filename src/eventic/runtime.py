@@ -58,8 +58,7 @@ class Collection[AnyT: BaseModel]:
     ) -> Revision[AnyT, Any]:
         aggregate_id = id or uuid4()
         request = plan_create(self._app, self._stream, state, aggregate_id, meta)
-        result = self._commit_one(request, state)
-        return result
+        return self._commit_one(request, None)
 
     def change(
         self, base: Revision[AnyT, Any], /, **fields: object

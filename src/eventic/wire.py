@@ -76,13 +76,17 @@ class StoredRevision:
 
 @dataclass(frozen=True, slots=True)
 class ClaimedIntent:
-    """A leased intent claimed by a worker."""
+    """A leased intent claimed by a worker, with enough to reconstruct the
+    commit: the aggregate key is joined from the log row."""
 
     intent_id: UUID
     subscription_id: str
     revision_id: UUID
     queue: str
     attempts: int
+    stream: str = ""
+    aggregate_id: UUID | None = None
+    revision: int = -1
 
 
 @dataclass(frozen=True, slots=True)

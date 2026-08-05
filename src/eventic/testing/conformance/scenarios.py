@@ -29,6 +29,14 @@ _A = UUID(int=1)
 _B = UUID(int=2)
 
 _DOC1: Payload = {"text": "a", "done": False}
+
+
+def _rid(stream: str, aid: UUID, revision: int) -> UUID:
+    from eventic.ids import revision_id as rid
+
+    return rid(stream, aid, revision)
+
+
 _DOC2: Payload = {"text": "b", "done": False}
 _DOC3: Payload = {"text": "c", "done": True}
 
@@ -465,16 +473,16 @@ INTENTS: tuple[Scenario, ...] = (
                 "create",
                 _DOC1,
                 intents=(
-                    intent("sub.a", UUID(int=1)),
-                    intent("sub.b", UUID(int=1)),
+                    intent("sub.a", _rid("todos", _A, 0)),
+                    intent("sub.b", _rid("todos", _A, 0)),
                 ),
             ),
             Claim(
                 name="both intents claimed",
                 queue="q",
                 expect=(
-                    ("sub.a", UUID(int=1), 1),
-                    ("sub.b", UUID(int=1), 1),
+                    ("sub.a", _rid("todos", _A, 0), 1),
+                    ("sub.b", _rid("todos", _A, 0), 1),
                 ),
             ),
         ),
@@ -489,9 +497,13 @@ INTENTS: tuple[Scenario, ...] = (
                 None,
                 "create",
                 _DOC1,
-                intents=(intent("sub.a", UUID(int=1)),),
+                intents=(intent("sub.a", _rid("todos", _A, 0)),),
             ),
-            Claim(name="claim one", queue="q", expect=(("sub.a", UUID(int=1), 1),)),
+            Claim(
+                name="claim one",
+                queue="q",
+                expect=(("sub.a", _rid("todos", _A, 0), 1),),
+            ),
             Settle(name="ack delivered", status="delivered"),
             Claim(name="queue is empty", queue="q", expect_none=True),
         ),
@@ -506,9 +518,13 @@ INTENTS: tuple[Scenario, ...] = (
                 None,
                 "create",
                 _DOC1,
-                intents=(intent("sub.a", UUID(int=1)),),
+                intents=(intent("sub.a", _rid("todos", _A, 0)),),
             ),
-            Claim(name="claim one", queue="q", expect=(("sub.a", UUID(int=1), 1),)),
+            Claim(
+                name="claim one",
+                queue="q",
+                expect=(("sub.a", _rid("todos", _A, 0), 1),),
+            ),
             Settle(name="nack with retry", status="retry", error="boom"),
             Claim(name="reclaim after retry", queue="q", expect_none=True),
         ),
@@ -523,9 +539,13 @@ INTENTS: tuple[Scenario, ...] = (
                 None,
                 "create",
                 _DOC1,
-                intents=(intent("sub.a", UUID(int=1)),),
+                intents=(intent("sub.a", _rid("todos", _A, 0)),),
             ),
-            Claim(name="claim one", queue="q", expect=(("sub.a", UUID(int=1), 1),)),
+            Claim(
+                name="claim one",
+                queue="q",
+                expect=(("sub.a", _rid("todos", _A, 0), 1),),
+            ),
             Settle(name="dead-letter", status="dead", error="boom"),
             Claim(name="queue is empty", queue="q", expect_none=True),
         ),
@@ -540,19 +560,19 @@ INTENTS: tuple[Scenario, ...] = (
                 None,
                 "create",
                 _DOC1,
-                intents=(intent("sub.a", UUID(int=1)),),
+                intents=(intent("sub.a", _rid("todos", _A, 0)),),
             ),
             Claim(
                 name="claim with a tiny lease",
                 queue="q",
                 lease=__import__("datetime").timedelta(milliseconds=50),
-                expect=(("sub.a", UUID(int=1), 1),),
+                expect=(("sub.a", _rid("todos", _A, 0), 1),),
             ),
             Wait(name="lease expires", seconds=0.1),
             Claim(
                 name="reclaim after lease expiry",
                 queue="q",
-                expect=(("sub.a", UUID(int=1), 2),),
+                expect=(("sub.a", _rid("todos", _A, 0), 2),),
             ),
         ),
     ),

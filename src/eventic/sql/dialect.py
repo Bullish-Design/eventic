@@ -24,6 +24,9 @@ from eventic.sql.tables import (
     eventic_intent as eventic_intent_table,
 )
 from eventic.sql.tables import (
+    eventic_revision as eventic_revision_table,
+)
+from eventic.sql.tables import (
     eventic_schema as eventic_schema_table,
 )
 
@@ -158,7 +161,8 @@ class Dialect:
         )
 
     def claim_select(self, queue: str, now: Any, limit: int) -> Any:
-        """The inner SELECT of the claim statement, with the right locking."""
+        """The claim SELECT, joined to the log for the aggregate key, with the
+        right locking."""
         intent = eventic_intent_table
         claimable = or_(
             and_(
@@ -171,7 +175,20 @@ class Dialect:
             ),
         )
         select = (
-            sa_select(intent.c.intent_id)
+            sa_select(
+                intent.c.intent_id,
+                intent.c.subscription_id,
+                intent.c.revision_id,
+                intent.c.queue,
+                intent.c.attempts,
+                eventic_revision_table.c.stream,
+                eventic_revision_table.c.aggregate_id,
+                eventic_revision_table.c.revision,
+            )
+            .join(
+                eventic_revision_table,
+                eventic_revision_table.c.revision_id == intent.c.revision_id,
+            )
             .where(intent.c.queue == queue, claimable)
             .order_by(intent.c.available_at)
             .limit(limit)

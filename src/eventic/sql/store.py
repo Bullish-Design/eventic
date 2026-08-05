@@ -460,18 +460,18 @@ class SQLite(Store):
                 # sub-second leases. committed_at is still the DB clock.
                 now = datetime.now(UTC)
                 rows = (
-                    conn.execute(
-                        st.claim_intents(
-                            self.dialect,
-                            queue,
-                            now,
-                            now + lease,
-                            limit,
-                        )
-                    )
+                    conn.execute(self.dialect.claim_select(queue, now, limit))
                     .mappings()
                     .all()
                 )
+                if rows:
+                    conn.execute(
+                        st.claim_mark_leased(
+                            self.dialect,
+                            [row["intent_id"] for row in rows],
+                            now + lease,
+                        )
+                    )
         except EventicError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -482,7 +482,10 @@ class SQLite(Store):
                 subscription_id=row["subscription_id"],
                 revision_id=row["revision_id"],
                 queue=row["queue"],
-                attempts=row["attempts"],
+                attempts=row["attempts"] + 1,
+                stream=row["stream"],
+                aggregate_id=row["aggregate_id"],
+                revision=row["revision"],
             )
             for row in rows
         ]
