@@ -371,6 +371,28 @@ class SQLite(Store):
             raise UsageError("revision must be >= 0")
         try:
             with self.engine.connect() as conn:
+                configured = self._encodings.get(key.stream)
+                if configured is not None and configured.encoding_id == "delta/1":
+                    every = int(getattr(configured, "every", 20))
+                    if revision == 0 or revision % every == 0:
+                        start = revision
+                    else:
+                        start = max(0, revision - every)
+                    window = (
+                        conn.execute(
+                            st.select_window(
+                                key.stream, key.aggregate_id, start, revision
+                            )
+                        )
+                        .mappings()
+                        .all()
+                    )
+                    if not window or window[-1]["revision"] != revision:
+                        return None
+                    payload = self._decode_window(
+                        key.stream, key.aggregate_id, revision, window
+                    )
+                    return self._log_row_to_stored(window[-1], payload)
                 row = (
                     conn.execute(
                         st.select_revision_row(key.stream, key.aggregate_id, revision)
@@ -515,6 +537,19 @@ class SQLite(Store):
     def _decode_log_revision(
         self, conn: Connection, stream: str, aggregate_id: UUID, revision: int
     ) -> JsonObject:
+        configured = self._encodings.get(stream)
+        if configured is not None and configured.encoding_id == "delta/1":
+            every = int(getattr(configured, "every", 20))
+            if revision == 0 or revision % every == 0:
+                start = revision
+            else:
+                start = max(0, revision - every)
+            window = (
+                conn.execute(st.select_window(stream, aggregate_id, start, revision))
+                .mappings()
+                .all()
+            )
+            return self._decode_window(stream, aggregate_id, revision, window)
         row = (
             conn.execute(st.select_revision_row(stream, aggregate_id, revision))
             .mappings()
@@ -540,6 +575,23 @@ class SQLite(Store):
             .mappings()
             .all()
         )
+        return self._decode_window(stream, aggregate_id, revision, window)
+
+    def _decode_window(
+        self,
+        stream: str,
+        aggregate_id: UUID,
+        revision: int,
+        window: Sequence[Any],
+    ) -> JsonObject:
+        """Decode a window of log rows ending at ``revision``."""
+        if not window or window[-1]["revision"] != revision:
+            raise NotFound(
+                "revision absent",
+                stream=stream,
+                aggregate_id=aggregate_id,
+                revision=revision,
+            )
         checkpoint = next(
             (r for r in reversed(window) if r["encoding"] == "snapshot/1"),
             None,
