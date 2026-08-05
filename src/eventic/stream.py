@@ -24,7 +24,9 @@ class Stream[T: BaseModel]:
 
     Equal and hashable by ``name`` — the name is the durable identity, so two
     declarations with the same name are the same stream even if the model
-    differs.
+    differs. ``App`` equality therefore means identity-of-declaration, not
+    equivalence-of-behaviour: two apps with the same stream names but
+    different state models compare equal (F9).
     """
 
     model: type[T]

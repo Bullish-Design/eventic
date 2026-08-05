@@ -50,10 +50,10 @@ class Meta[M: BaseModel]:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Meta):
             return False
-        return self.model is other.model  # type: ignore[reportUnknownMemberType]
+        return self.model is other.model and self.version == other.version  # type: ignore[reportUnknownMemberType]
 
     def __hash__(self) -> int:
-        return hash(self.model)
+        return hash((self.model, self.version))
 
 
 class _Empty(BaseModel):

@@ -218,3 +218,32 @@ def test_single_fault_class_carries_all_its_messages() -> None:
     msg = str(excinfo.value)
     assert "duplicate stream name: todos" in msg
     assert "duplicate subscription id: s" in msg
+
+
+# ---------------------------------------------------------------------------
+# F9: Meta equality includes version (App equality is identity-of-declaration)
+# ---------------------------------------------------------------------------
+
+from eventic.evolution import make_upcaster  # noqa: E402
+from eventic.meta import Meta  # noqa: E402
+
+
+def test_meta_equality_includes_version() -> None:
+    m1 = Meta(_Todo, version=1)
+    m2 = Meta(_Todo, version=2, upcasters={1: make_upcaster(1, 2, lambda t: t)})
+    assert m1 != m2
+    assert hash(m1) != hash(m2)
+
+
+def test_meta_equality_same_version_still_equal() -> None:
+    assert Meta(_Todo, version=1) == Meta(_Todo, version=1)
+    assert hash(Meta(_Todo, version=1)) == hash(Meta(_Todo, version=1))
+
+
+def test_app_equality_includes_meta_version() -> None:
+    m1 = Meta(_Todo, version=1)
+    m2 = Meta(_Todo, version=2, upcasters={1: make_upcaster(1, 2, lambda t: t)})
+    a = App(id="a", streams=[Stream(_Todo, name="todos")], meta=m1)
+    b = App(id="a", streams=[Stream(_Todo, name="todos")], meta=m2)
+    assert a != b
+    assert hash(a) != hash(b)
