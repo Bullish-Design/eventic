@@ -160,3 +160,27 @@ break an import cycle), D4 (codec `fetch` read-hint). **probe_02's scenario now
 raises `StaleVersionError`** (verified inline); 21 core tests in 0.70s; old
 suite still 28 green.
 **Committed:** Steps 1, 2, 3.
+
+## 2026-08-04 — Session 3 (cont.) — Steps 4–5, Phase 1 tag
+
+**Step 4 — edit() batch writes.** `_EditProxy` (draft-copy namespace, nested
+mutations land on the copy) + exit-time field diff; one `update` per batch,
+no-op on empty/identical edits; exception in the with-block writes nothing.
+Pydantic's `model_dump` copies nested dicts (verified) so the original object
+stays untouched (I3). 7 tests.
+
+**Step 5 — events core (I7).** `eventbus.py` (working name, D1): `Event` +
+`on_commit(*classes, kind="*", mode="sync")` + `_HANDLERS` registry (class-
+object keyed, MRO + registration order). `SyncDelivery` runs matching sync
+handlers strictly post-persist, isolated (logged, never propagated). Handlers
+receive the `Event` (D5). Pipeline `commit_version` emits exactly once per
+commit; `save`→create, `update`/`edit`/`commit`→update with the field delta.
+9 tests incl. H6 timing, delta receipt, class-object keying, MRO, isolation.
+
+**Deviation D6** (I6 static until Step 9 — old `__init__.py` still imports
+DBOS; live assertion lands with the Step-9 rewrite). Also added the Step-13
+DBOS-free invariant as a static source check.
+
+**Phase 1 exit gate:** 49 core tests in **1.18s** (old suite ≈35s → R-P3
+closed); old suite still 28 green. Core upholds I1–I7. Tagged `0.2.0-alpha`.
+**Committed:** Steps 4, 5; tag `0.2.0-alpha`.

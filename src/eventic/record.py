@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from . import pipeline
 from .plugins.codec import FullSnapshot
+from .plugins.delivery import SyncDelivery
 from .plugins.identity import Uuid5Deterministic, _uuid5
 from .plugins.persistence import SingleTableJSONB
 
@@ -70,6 +71,7 @@ class Record(BaseModel):
     _persistence: ClassVar[SingleTableJSONB] = SingleTableJSONB()
     _codec: ClassVar[FullSnapshot] = FullSnapshot()
     _identity: ClassVar[Uuid5Deterministic] = Uuid5Deterministic()
+    _delivery: ClassVar[SyncDelivery] = SyncDelivery()
 
     def model_post_init(self, _):
         """PURE: stamp v0's deterministic identity only — never any I/O (I3)."""
@@ -96,7 +98,7 @@ class Record(BaseModel):
         data["version_id"] = _uuid5(self.id, data["version"])
         data.pop("created_ts", None)  # the row's DB default stamps it
         new = type(self)(**data)
-        pipeline.commit_version(type(self), new=new, prev=self, kind="update")
+        pipeline.commit_version(type(self), new=new, prev=self, kind="update", delta=changes)
         return new
 
     @contextmanager

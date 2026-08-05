@@ -529,3 +529,14 @@ Appendix B). Each row: date · step · deviation · reason.
   `codec.fetch(persistence, id, class_type, version=...)` — `FullSnapshot`
   returns `[latest]`/`[at]`; `DiffStorage` (Step 8) will override it to stream
   from the nearest snapshot. Keeps `decode` pure and the pipeline codec-agnostic.
+- **2026-08-04 · Step 5 · D5 — sync handlers receive the `Event`, not just
+  `event.record`.** The guide's `SyncDelivery.deliver` sketch calls
+  `fn(event.record)`, but the same step's test list requires "update handler
+  receives the delta" — impossible if the handler can't see `event.delta`. The
+  contract is `fn(event)` with `event.record` / `event.kind` / `event.delta`.
+- **2026-08-04 · Phase 1 · D6 — I6 is asserted statically until Step 9.** The
+  old `eventic/__init__.py` (still active until the Step-9 rewrite) imports the
+  old DBOS-laden modules, so a live `import eventic` *cannot* be DBOS-free yet.
+  `test_core_is_dbos_free.py` therefore greps the new core module graph for
+  dbos/fastapi imports; the fresh-interpreter assertion lands with the Step-9
+  `__init__.py` rewrite and is re-verified in the Step-13 matrix.

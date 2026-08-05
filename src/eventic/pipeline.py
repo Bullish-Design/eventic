@@ -12,16 +12,26 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from .eventbus import Event
+
 if TYPE_CHECKING:
     from .record import Record
 
 
-def commit_version(cls: type["Record"], new: "Record", *, prev: "Record | None" = None, kind: str = "create") -> None:
+def commit_version(
+    cls: type["Record"],
+    new: "Record",
+    *,
+    prev: "Record | None" = None,
+    kind: str = "create",
+    delta: dict | None = None,
+) -> None:
     """Persist ``new`` as the next immutable version of its aggregate (I1/I4/I5).
 
-    ``kind`` is one of ``"create"``/``"update"`` and names the event emitted
-    post-commit (Step 5). ``prev`` is the previous version the codec may need
-    (a diff codec derives the delta from it).
+    ``kind`` names the event emitted post-commit (I7) — ``"create"`` for
+    ``save``, ``"update"`` for ``update``/``edit``/``commit``. ``prev`` is the
+    previous version a diff codec needs; ``delta`` is the field-level change
+    handed to update handlers.
     """
     # 1. before_commit interceptors (Step 6; none by default)
     # 2. encode (exclusive codec seam)
@@ -37,7 +47,8 @@ def commit_version(cls: type["Record"], new: "Record", *, prev: "Record | None" 
         }
     )
     # 4. after_commit interceptors (Step 6)
-    # 5. emit -> deliver (Step 5; strictly post-durable, I7)
+    # 5. emit -> deliver — strictly post-durable, exactly once (I7)
+    cls._delivery.deliver(Event(kind=kind, record=new, delta=delta))
 
 
 def read(cls: type["Record"], rec_id: uuid.UUID, *, version: int | None = None) -> "Record":
