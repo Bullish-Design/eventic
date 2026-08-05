@@ -340,6 +340,27 @@ def test_dead_lettered_raises_when_expected() -> None:
     assert isinstance(err, Exception)
 
 
+def test_run_forever_stops_via_stop_flag() -> None:
+    """F11: run_forever exits promptly when stop() is called, even mid-sleep."""
+    import threading
+
+    store = SQLite(":memory:")
+    todos = Stream(Todo, name="todos")
+    app = _app(todos, lambda c: None)
+    worker = Worker(app, store, queue="q")
+
+    def stopper() -> None:
+        time.sleep(0.05)
+        worker.stop()
+
+    thread = threading.Thread(target=stopper)
+    thread.start()
+    worker.run_forever(poll=timedelta(milliseconds=5))
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    store.close()
+
+
 def test_last_error_redacted_no_credentials() -> None:
     store = SQLite(":memory:")
     todos = Stream(Todo, name="todos")

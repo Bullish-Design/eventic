@@ -86,6 +86,8 @@ def verify(
 
 
 def worker(app: App, url: str, *, queue: str, once: bool, out: Any = sys.stdout) -> int:
+    import signal
+
     store = make_store(url)
     try:
         worker = Worker(app, store, queue=queue)
@@ -97,6 +99,13 @@ def worker(app: App, url: str, *, queue: str, once: bool, out: Any = sys.stdout)
                 file=out,
             )
             return EXIT_FAILURE if report.dead_lettered > 0 else EXIT_OK
+
+        # The library never installs signal handlers (F11): the CLI owns the
+        # process, so SIGTERM/SIGINT map to a graceful stop after the current
+        # drain — leases from a killed mid-batch drain stay claimed until they
+        # expire, which at-least-once absorbs.
+        signal.signal(signal.SIGTERM, lambda _s, _f: worker.stop())
+        signal.signal(signal.SIGINT, lambda _s, _f: worker.stop())
         worker.run_forever()
         return EXIT_OK
     finally:

@@ -7,6 +7,7 @@ must be idempotent. The worker holds no database lock while user code runs.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -52,6 +53,7 @@ class Worker:
         self._lease = lease
         self._batch_size = batch_size
         self._subscriptions = {sub.id: sub for sub in app.subscriptions}
+        self._stop = threading.Event()
 
     def drain_once(self) -> WorkerReport:
         claimed = self._store.claim(
@@ -66,13 +68,24 @@ class Worker:
         self._store.settle(settlements)
         return report
 
-    def run_forever(self, *, poll: timedelta = timedelta(seconds=1)) -> None:
-        """Drain in a loop; returns only on interruption."""
-        while True:
-            self.drain_once()
-            import time
+    def stop(self) -> None:
+        """Signal ``run_forever`` to return after the current drain.
 
-            time.sleep(poll.total_seconds())
+        The signal handler lives in the CLI, not the library: a library that
+        installs signal handlers breaks its host (F11).
+        """
+        self._stop.set()
+
+    def run_forever(self, *, poll: timedelta = timedelta(seconds=1)) -> None:
+        """Drain in a loop; returns when :meth:`stop` is called.
+
+        The stop flag is checked before each drain, and the sleep is an
+        ``Event.wait``, so ``stop()`` takes effect within ``poll`` even when
+        the worker is between drains.
+        """
+        while not self._stop.is_set():
+            self.drain_once()
+            self._stop.wait(poll.total_seconds())
 
     # -- internals -----------------------------------------------------------
 

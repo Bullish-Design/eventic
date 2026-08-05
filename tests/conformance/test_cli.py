@@ -169,3 +169,55 @@ def test_no_command_prints_url_or_payload(url: str) -> None:
         assert r.returncode == 0, (args, r.stderr)
         assert url not in r.stdout
         assert "hunter2" not in r.stdout
+
+
+def test_worker_stops_gracefully_on_sigterm(tmp_path: Path) -> None:
+    """F11: `eventic worker` (no --once) installs SIGTERM/SIGINT handling and
+    exits 0 promptly on the signal, after the current drain."""
+    import signal
+    import time
+
+    url = f"sqlite:///{tmp_path / 'sig.db'}"
+    env = {
+        "PYTHONPATH": str(ROOT / "src") + ":" + str(ROOT / "tests" / "fixtures"),
+    }
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "eventic.cli.main",
+            "--app",
+            "demo_app:app",
+            "--url",
+            url,
+            "worker",
+            "--queue",
+            "q",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        cwd=ROOT,
+    )
+    try:
+        time.sleep(1.0)  # let the worker enter run_forever
+        assert proc.poll() is None, "worker exited before the signal"
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise AssertionError("worker did not stop within 10s of SIGTERM") from None
+        assert proc.returncode == 0, (
+            (proc.stderr or b"").decode() if proc.stderr else ""
+        )
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        if proc.stdout:
+            proc.stdout.close()
+        if proc.stderr:
+            proc.stderr.close()
