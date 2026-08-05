@@ -9,7 +9,6 @@ devenv.yaml
 .tmuxp.yaml
 .envrc
 .python-version
-migrations/*
 
 # C extensions
 *.so

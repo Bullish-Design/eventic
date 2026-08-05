@@ -2,20 +2,10 @@
 
 name: eventic
 language: python
+database_url: ${DBOS_DATABASE_URL}
+database:
+  migrate:
+    - "alembic upgrade head"
 runtimeConfig:
   start:
-    #- "python ./eventic/src/config.py"
-    #- "fastapi run eventic/main.py"
-    - "python3 src/eventic/app/main.py"
-database:
-  hostname: ${HOSTNAME}
-  port: ${PORT}
-  username: ${POSTGRES_USER}
-  password: ${POSTGRES_PASSWORD}
-  app_db_name: ${APP_DB_NAME}
-  migrate:
-    - alembic upgrade head 
-telemetry:
-  logs:
-    logLevel: INFO
-
+    - "uvicorn eventic.main:app --host 0.0.0.0 --port 8000"

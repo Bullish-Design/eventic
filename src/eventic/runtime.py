@@ -86,8 +86,7 @@ class Eventic(DBOS):  # ① inherit all decorators & queue API
     # ---------- convenience helpers ----------
     @classmethod
     def queue(cls, name: str, *, concurrency: int | None = None, **kw):
-        # if name not in {"default", "email_sender", "analytics"}:
-        #    raise ValueError(f"Queue {name!r} is not allowed")
+        """Create/reuse a DBOS Queue. concurrency=None means DBOS's default."""
         return Queue(name, concurrency=concurrency, **kw)
 
     @classmethod

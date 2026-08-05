@@ -3,9 +3,9 @@ Single entry-point that wires SQLAlchemy + DBOS into Eventic.
 Call once, e.g. in FastAPI startup or Django AppConfig.ready().
 """
 
+import os
 from typing import TYPE_CHECKING
 
-# from dbos import DBOS  # pip install dbos
 from sqlalchemy.engine import Engine
 
 from .core.record import Record
@@ -18,12 +18,17 @@ if TYPE_CHECKING:  # for type-checkers
 
 def init_eventic(engine: Engine) -> None:
     """
-    Initialise the global RecordStore, link DBOS to Postgres,
-    and inject the store into **all** current Record subclasses.
+    Initialise the global RecordStore and inject it into **all** current
+    Record subclasses.
+
+    Table creation is a development convenience: by default the schema is
+    created if missing (idempotent), but Alembic migrations
+    (``alembic upgrade head``) are the source of truth in production — set
+    ``EVENTIC_AUTO_CREATE_TABLES=0`` to disable the auto-create entirely.
     """
-    Base.metadata.create_all(engine)  # ← this line creates table
+    if os.environ.get("EVENTIC_AUTO_CREATE_TABLES", "1") not in {"0", "false", "False"}:
+        Base.metadata.create_all(engine)
     global_store = RecordStore(engine)
-    # DBOS.link_to_db(engine)
 
     # Attach store to Record *and* every existing subclass
     Record._store = global_store  # type: ignore[attr-defined]

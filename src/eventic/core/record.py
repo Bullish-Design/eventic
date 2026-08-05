@@ -196,4 +196,7 @@ class Record(BaseModel, metaclass=RecordMeta):
     @classmethod
     def _ensure_store(cls):
         if cls._store is None:
-            raise RuntimeError("Call init_eventic(engine) before using Record")
+            raise RuntimeError(
+                "No store wired yet: call Eventic.init(...) or init_eventic(engine) "
+                "before using Record"
+            )

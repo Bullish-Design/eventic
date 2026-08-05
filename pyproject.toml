@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
 dependencies = [
+    "alembic>=1.13",               # migrations (dbos 2.x no longer pulls it in)
     "dbos>=2.29.0,<3.0",
     "fastapi>=0.115.2",          # runtime.py imports it directly; dbos no longer pulls it in
     "sqlalchemy>=2.0.43",        # store.py/models.py import it directly
@@ -29,7 +30,7 @@ test = [
 eventic-example = "eventic.examples.demo:main"   # fixed in Step 6 (M2)
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/eventic", "src/examples"]
+packages = ["src/eventic"]
 
 #[tool.hatch.build.targets.sdist]
 #include = ["src/examples/**"]
