@@ -77,7 +77,16 @@ class SQLite(Store):
             url_or_path = f"sqlite:///{url_or_path}"
         self.dialect = Dialect(name="sqlite", capabilities=SQLITE_CAPABILITIES)
         self._encodings = dict(encodings or {})
-        self.engine = create_engine(url_or_path)
+        if ":memory:" in url_or_path:
+            from sqlalchemy.pool import StaticPool
+
+            self.engine = create_engine(
+                url_or_path,
+                poolclass=StaticPool,
+                connect_args={"check_same_thread": False},
+            )
+        else:
+            self.engine = create_engine(url_or_path)
         self._install_sqlite_events()
         self._create_tables()
 
