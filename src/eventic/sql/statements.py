@@ -97,41 +97,6 @@ def insert_intents(dialect: Dialect, values: list[dict[str, Any]]) -> Any:
     return intents.insert().values(values)
 
 
-def claim_intents(
-    dialect: Dialect,
-    queue: str,
-    now: Any,
-    lease_until: Any,
-    limit: int,
-) -> Any:
-    """Lease the oldest claimable intents and return them in one statement.
-
-    The aggregate key is joined from the log row so the worker can reconstruct
-    the commit without another lookup.
-    """
-    inner = dialect.claim_select(queue, now, limit)
-    claimed = (
-        update(intents)
-        .where(intents.c.intent_id.in_(inner))
-        .values(
-            status="leased",
-            leased_until=lease_until,
-            attempts=intents.c.attempts + 1,
-        )
-        .returning(
-            intents.c.intent_id,
-            intents.c.subscription_id,
-            intents.c.revision_id,
-            intents.c.queue,
-            intents.c.attempts,
-            revisions.c.stream,
-            revisions.c.aggregate_id,
-            revisions.c.revision,
-        )
-    )
-    return claimed
-
-
 def claim_mark_leased(
     dialect: Dialect,
     intent_ids: Sequence[UUID],
