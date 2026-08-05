@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel
+
 from eventic.envelopes import Commit, Kind
 from eventic.stream import Stream
 
@@ -34,7 +36,7 @@ class Outbox:
 
 
 @dataclass(frozen=True)
-class Subscription[T: object, M: object]:
+class Subscription[T: BaseModel, M: BaseModel]:
     """One handler, for one stream, for a set of kinds, with one delivery."""
 
     id: str

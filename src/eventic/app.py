@@ -124,6 +124,8 @@ class App(BaseModel):
                 "app declares Outbox subscriptions but the store does not "
                 "support transactional delivery intents",
             )
-        from eventic.runtime import Runtime
+        from eventic.runtime import (
+            Runtime,  # type: ignore[reportMissingImports]  # Phase 8
+        )
 
-        return Runtime(app=self, store=store)
+        return Runtime(app=self, store=store)  # type: ignore[reportUnknownVariableType]
