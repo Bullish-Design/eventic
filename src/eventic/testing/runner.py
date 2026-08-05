@@ -34,6 +34,7 @@ from eventic.testing.conformance.store import (
     Search,
     Settle,
     Step,
+    Time,
     Wait,
 )
 from eventic.wire import (
@@ -66,6 +67,7 @@ class ScenarioResult:
 class _Context:
     def __init__(self) -> None:
         self.last_claimed: list[ClaimedIntent] = []
+        self.last_commit_stamps: set[datetime] = set()
 
 
 def _capability_names(caps: Capabilities) -> frozenset[str]:
@@ -142,6 +144,7 @@ def _run_step(store: Store, ctx: _Context, step: Step) -> None:
             _expect_raise(lambda: store.commit([request]), step.expect_error)
             return
         results = store.commit([request])
+        ctx.last_commit_stamps = {result.committed_at for result in results}
         if len(results) != 1:
             raise StepFailure(f"commit returned {len(results)} results")
         result = results[0]
@@ -163,6 +166,7 @@ def _run_step(store: Store, ctx: _Context, step: Step) -> None:
             _expect_raise(lambda: store.commit(requests), step.expect_error)
             return
         results = store.commit(requests)
+        ctx.last_commit_stamps = {result.committed_at for result in results}
         if len(results) != len(requests):
             raise StepFailure(
                 f"batch returned {len(results)} results for {len(requests)} requests"
@@ -276,6 +280,10 @@ def _run_step(store: Store, ctx: _Context, step: Step) -> None:
         time.sleep(step.seconds)
         return
 
+    if isinstance(step, Time):
+        _run_time(store, ctx, step)
+        return
+
     if isinstance(step, Race):
         _run_race(store, step)
         return
@@ -285,6 +293,33 @@ def _run_step(store: Store, ctx: _Context, step: Step) -> None:
         return
 
     raise StepFailure(f"unknown step op {type(step).__name__}")
+
+
+def _run_time(store: Store, ctx: _Context, step: Time) -> None:
+    page = store.history(
+        AggregateKey(step.stream, step.aggregate_id),
+        after=step.after,
+        limit=step.limit,
+    )
+    stamps = [item.committed_at for item in page.items]
+    if not stamps:
+        raise StepFailure("no revisions to inspect for committed_at")
+    for stamp in stamps:
+        offset = getattr(stamp, "utcoffset", lambda: None)()
+        if offset is None or offset.total_seconds() != 0:
+            raise StepFailure(f"committed_at is not tz-aware UTC: {stamp!r}")
+    from itertools import pairwise
+
+    for earlier, later in pairwise(stamps):
+        if later < earlier:
+            raise StepFailure(
+                f"committed_at decreased across revisions: {earlier!r} > {later!r}"
+            )
+    if len(ctx.last_commit_stamps) > 1:
+        raise StepFailure(
+            "requests inside one commit got different committed_at values: "
+            f"{sorted(ctx.last_commit_stamps)!r}"
+        )
 
 
 def _run_race(store: Store, step: Race) -> None:

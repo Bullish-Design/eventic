@@ -18,6 +18,11 @@ usage/config error, `3` drift detected.
 No command prints a connection URL or a payload. `inspect` prints every fact
 that affects a commit; if a behavior is invisible there, it is a design bug.
 
+`committed_at` is UTC and assigned by the database, **non-decreasing** in
+revision order, but it is not a sort key: its precision is the database
+clock's (whole seconds on SQLite), so a batch or a burst of commits can
+share one reading. Order revisions by `revision`.
+
 ## Production guidance
 
 Grant the application role `INSERT` and `SELECT` on `eventic_revision` only.

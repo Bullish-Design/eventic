@@ -131,6 +131,21 @@ class Wait(Step):
 
 
 @dataclass(frozen=True, slots=True)
+class Time(Step):
+    """Committed timestamps: tz-aware UTC, non-decreasing in revision order,
+    and identical for every request inside one commit.
+
+    The last ``Commit``/``Batch`` step records the timestamps it produced; the
+    runner asserts they were one reading (F10).
+    """
+
+    stream: str
+    aggregate_id: UUID
+    after: int = -1
+    limit: int = 100
+
+
+@dataclass(frozen=True, slots=True)
 class Race(Step):
     """N writers race one (stream, id, expected_revision) on the same store.
 
