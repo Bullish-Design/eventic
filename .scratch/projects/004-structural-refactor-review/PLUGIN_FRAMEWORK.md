@@ -220,6 +220,7 @@ from eventic import Application
 
 
 application = Application(
+    id="todo-service",
     streams=[Todos],
     subscriptions=[],
     policies=[],
@@ -330,11 +331,17 @@ class Proposal[StateT, MetaT]:
 Policies may be:
 
 - Pure rules using proposal state and typed metadata.
-- Transactional rules using an explicitly supplied read-only transaction view.
 - Sync or async, but never ambiguously both.
 
-Authorization and uniqueness rules are policies. State shape and field invariants
-remain Pydantic validators.
+Policies in the 1.0 design do not receive a database or transaction view. A check
+requiring cross-aggregate consistency belongs in an explicit database constraint or
+application service until a concrete second use case justifies a separately designed
+transactional-policy contract. This keeps policy execution portable and prevents a
+plugin from escaping the store's atomic commit boundary.
+
+Authorization and proposal-local business rules are policies. Database-backed
+uniqueness remains a store constraint, while state shape and field invariants remain
+Pydantic validators.
 
 A rejected policy raises `CommitRejected` with a stable machine-readable code:
 
@@ -381,10 +388,18 @@ class RequestMetadata(BaseModel):
 
 
 application = Application(
+    id="todo-service",
     streams=[Todos],
     metadata=RequestMetadata,
+    metadata_schema_version=1,
+    metadata_upcasters={},
 )
 ```
+
+Metadata is durable state and follows the same discipline as stream state: its own
+cached Pydantic adapter, schema version, fingerprint, canonical representation, and
+explicit upcaster chain. Applications without custom metadata use an empty,
+versioned `NoMetadata` model.
 
 A metadata provider may supply defaults before metadata validation:
 
@@ -403,7 +418,7 @@ before retryable database work begins.
 
 ## 14. Post-commit observers
 
-Observers receive a fully committed, immutable event envelope:
+Observers receive a fully committed, detached event envelope:
 
 ```python
 class CommitObserver(Protocol):
@@ -434,6 +449,7 @@ Delivery remains a property of the subscription:
 
 ```python
 application = Application(
+    id="todo-service",
     streams=[Todos],
     subscriptions=[
         Subscription(
@@ -819,6 +835,7 @@ Application usage is explicit:
 
 ```python
 application = Application(
+    id="todo-service",
     streams=[Todos],
     extensions=[
         SearchExtension(
@@ -1186,8 +1203,10 @@ still limits accidental authority:
 - Compilation receives no database credentials unless a store capability inspection
   explicitly requires a connected store.
 - Read-only catalogs expose declarations, not live mutable runtime objects.
-- Policies receive the minimum transaction view required for their contract.
-- Observers receive immutable committed envelopes.
+- Policies receive normalized proposals and typed metadata, never a database session
+  or transaction view.
+- Observers receive detached committed envelopes whose mutation cannot change durable
+  state or another observer's input.
 - Delivery handlers receive reconstructed typed events, not arbitrary ORM sessions.
 - Manifests redact resource configuration and never serialize secrets.
 - Payload-transform errors identify transform IDs without printing payloads or keys.
@@ -1266,8 +1285,11 @@ Todos = Stream(
 )
 
 application = Application(
+    id="todo-service",
     streams=[Todos],
     metadata=RequestMetadata,
+    metadata_schema_version=1,
+    metadata_upcasters={},
     observers=[OpenTelemetryObserver(tracer)],
     subscriptions=[
         Subscription(

@@ -21,5 +21,7 @@ before 0.3 is treated as a durable event-history library.
   implementation sequence, and validation matrix
 - `PLUGIN_FRAMEWORK.md` — detailed design for the rewrite's typed, explicit,
   Pydantic-aware extension framework
+- `IMPLEMENTATION_GUIDE.md` — phased, test-gated implementation program for the
+  complete Pydantic-first rewrite
 - `probes/runtime_adversarial.py` — executable runtime counterexamples
 - `probes/migration_adversarial.py` — executable Alembic/schema counterexamples

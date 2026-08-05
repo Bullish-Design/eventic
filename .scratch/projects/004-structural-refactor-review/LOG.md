@@ -107,6 +107,10 @@ Confirmed against a fresh `alembic upgrade head` SQLite database:
 - `PLUGIN_FRAMEWORK.md` specifies the proposed rewrite's sealed invariant kernel,
   typed runtime protocols, extension bundles, application compilation, storage and
   delivery seams, schema integration, operability, and conformance requirements.
+- `IMPLEMENTATION_GUIDE.md` turns the rewrite into an ordered, test-gated execution
+  plan covering the public API, canonicalization, stores, PostgreSQL schema,
+  delivery, evolution, projections, layouts, async parity, extensions, hardening,
+  documentation, and release cutover.
 - `probes/runtime_adversarial.py` contains reproducible runtime counterexamples.
 - `probes/migration_adversarial.py` contains reproducible production-schema and
   downgrade counterexamples.
