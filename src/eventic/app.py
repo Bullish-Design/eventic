@@ -38,22 +38,27 @@ def _handler_problems(sub: Subscription[Any, Any]) -> list[str]:
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
             )
         ]
-        hints = inspect.get_annotations(handler, eval_str=True)
-    except (TypeError, ValueError, NameError):
+    except (TypeError, ValueError):
         params = []
-        hints = {}
     if len(params) != 1:
         problems.append(
             f"subscription {sub.id}: handler must accept exactly one positional "
             f"argument (a Commit[T, M]); got {len(params)}"
         )
-    elif params:
-        annotation = hints.get(params[0].name, inspect.Parameter.empty)
-        if annotation is not inspect.Parameter.empty and not _is_commit(annotation):
-            problems.append(
-                f"subscription {sub.id}: handler argument must be typed as "
-                f"Commit[T, M] (got {annotation!r})"
-            )
+        return problems
+    # Annotation check is best-effort: string annotations that reference
+    # function-local names cannot be evaluated, and an untyped handler is
+    # acceptable (dispatch is dynamic).
+    try:
+        hints = inspect.get_annotations(handler, eval_str=True)
+    except (TypeError, ValueError, NameError):
+        hints = {}
+    annotation = hints.get(params[0].name, inspect.Parameter.empty)
+    if annotation is not inspect.Parameter.empty and not _is_commit(annotation):
+        problems.append(
+            f"subscription {sub.id}: handler argument must be typed as "
+            f"Commit[T, M] (got {annotation!r})"
+        )
     return problems
 
 

@@ -94,6 +94,13 @@ class SQLite(Store):
         @sa_event.listens_for(self.engine, "connect")
         def _set_isolation(dbapi_conn: Any, _record: Any) -> None:  # type: ignore[reportUnusedFunction]
             dbapi_conn.isolation_level = None  # manual BEGIN control
+            # WAL lets readers and the single writer coexist; busy_timeout
+            # converts transient lock contention into a short wait.
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=10000")
+            cursor.execute("PRAGMA wal_autocheckpoint=5000")
+            cursor.close()
 
         @sa_event.listens_for(self.engine, "begin")
         def _begin_immediate(conn: Connection) -> None:  # type: ignore[reportUnusedFunction]
