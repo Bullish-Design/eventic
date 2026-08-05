@@ -10,9 +10,10 @@ stored.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import uuid
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from .eventbus import Event
 from .plugins import delivery_backends
@@ -21,6 +22,34 @@ if TYPE_CHECKING:
     from .record import Record
 
 logger = logging.getLogger(__name__)
+
+_MISSING = object()
+
+
+def _jsonable(value: Any) -> Any:
+    """Normalize filter values to what the JSON column actually stores."""
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, (dt.date, dt.datetime)):
+        return value.isoformat()
+    return value
+
+
+def _get_path(data: Any, path: str) -> Any:
+    """Dotted-path lookup: ``"meta.status"`` → ``data["meta"]["status"]``."""
+    cur = data
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return _MISSING
+        cur = cur[part]
+    return cur
+
+
+def _match(data: Any, filter_: dict[str, Any]) -> bool:
+    """Python-side JSON containment (portable across SQLite/Postgres)."""
+    if not isinstance(data, dict):
+        return False
+    return all(_get_path(data, k) == v for k, v in filter_.items())
 
 
 def commit_version(
@@ -92,3 +121,16 @@ def history(cls: type["Record"], rec_id: uuid.UUID) -> list["Record"]:
     return [
         _hydrate(cls, cls._codec.decode(rows[: i + 1])) for i in range(len(rows))
     ]
+
+
+def where(cls: type["Record"], **filters: Any) -> list["Record"]:
+    """Latest records whose *reconstructed head* matches every (dotted-path)
+    key/value pair — codec-aware (D14): a diff codec's latest row is a delta,
+    so the match runs against ``codec.head_state``, never a raw row."""
+    filter_ = {str(k): _jsonable(v) for k, v in filters.items()}
+    ids: list[uuid.UUID] = []
+    for rid, row in cls._persistence.latest_rows(cls.__name__):
+        state = cls._codec.head_state(cls._persistence, cls.__name__, rid, row)
+        if _match(state, filter_):
+            ids.append(rid)
+    return [read(cls, rid) for rid in ids]

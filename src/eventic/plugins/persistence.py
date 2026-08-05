@@ -16,9 +16,8 @@ read path consume, scoped by ``class_type`` (H4).
 
 from __future__ import annotations
 
-import datetime as dt
 import uuid
-from typing import Any, Iterable
+from typing import Any
 
 from sqlalchemy import func, insert, select
 from sqlalchemy.exc import IntegrityError
@@ -28,8 +27,6 @@ from ..connect import engine
 from ..errors import StaleVersionError
 from ..models import RecordRow
 from . import Plugin, Seam
-
-_MISSING = object()
 
 # Optional ambient-transaction hook: an adapter (eventic.dbos) registers a
 # provider so appends can JOIN the surrounding transaction when one is active
@@ -47,32 +44,6 @@ def set_ambient_session_provider(fn) -> None:
 def _reset_ambient_session_provider() -> None:
     global _ambient_session
     _ambient_session = lambda: None
-
-
-def _jsonable(value: Any) -> Any:
-    """Normalize filter values to what the JSON column actually stores."""
-    if isinstance(value, uuid.UUID):
-        return str(value)
-    if isinstance(value, (dt.date, dt.datetime)):
-        return value.isoformat()
-    return value
-
-
-def _get_path(data: Any, path: str) -> Any:
-    """Dotted-path lookup: ``"meta.status"`` → ``data["meta"]["status"]``."""
-    cur = data
-    for part in path.split("."):
-        if not isinstance(cur, dict) or part not in cur:
-            return _MISSING
-        cur = cur[part]
-    return cur
-
-
-def _dict_contains(data: Any, filter_: dict[str, Any]) -> bool:
-    """Python-side JSON containment (portable across SQLite/Postgres)."""
-    if not isinstance(data, dict):
-        return False
-    return all(_get_path(data, k) == v for k, v in filter_.items())
 
 
 class SingleTableJSONB(Plugin):
@@ -193,22 +164,52 @@ class SingleTableJSONB(Plugin):
                 ).scalars()
             )
 
-    def query(self, class_type: str, filter_: dict[str, Any]) -> list[uuid.UUID]:
-        """Ids whose **latest** version's data matches every (dotted) key."""
-        filter_ = {str(k): _jsonable(v) for k, v in filter_.items()}
+    def latest_rows(self, class_type: str) -> list[tuple[uuid.UUID, RecordRow]]:
+        """(id, latest row) for every aggregate of this class (D14: the
+        codec's ``head_state`` reconstructs the true head from these)."""
         rn = func.row_number().over(
             partition_by=RecordRow.id, order_by=RecordRow.version.desc()
         ).label("rn")
-        latest = (
-            select(RecordRow.id.label("rid"), RecordRow.data.label("data"), rn)
+        sub = (
+            select(
+                RecordRow.id.label("rid"),
+                RecordRow.version_id.label("version_id"),
+                RecordRow.version.label("version"),
+                RecordRow.class_type.label("class_type"),
+                RecordRow.created_ts.label("created_ts"),
+                RecordRow.data.label("data"),
+                rn,
+            )
             .where(RecordRow.class_type == class_type)
             .subquery()
         )
         with Session(engine(), future=True) as s:
-            rows = s.execute(
-                select(latest.c.rid, latest.c.data).where(latest.c.rn == 1)
-            ).all()
-        return [rid for rid, data in rows if _dict_contains(data, filter_)]
+            rows = s.execute(select(sub).where(sub.c.rn == 1)).all()
+        return [
+            (
+                r.rid,
+                RecordRow(
+                    version_id=r.version_id,
+                    id=r.rid,
+                    version=r.version,
+                    class_type=r.class_type,
+                    created_ts=r.created_ts,
+                    data=r.data,
+                ),
+            )
+            for r in rows
+        ]
+
+    def query(self, class_type: str, filter_: dict[str, Any]) -> list[uuid.UUID]:
+        """DEPRECATED read primitive kept for the guide's module map; the
+        pipeline's ``where()`` uses ``latest_rows`` + the codec's
+        ``head_state`` instead (D14) so diff-stored classes match on the true
+        head, not on a delta row."""
+        rows = self.latest_rows(class_type)
+        from ..pipeline import _match
+
+        filter_ = {str(k): _jsonable(v) for k, v in filter_.items()}
+        return [rid for rid, row in rows if _match(row.data, filter_)]
 
 
 class TypedTable(Plugin):

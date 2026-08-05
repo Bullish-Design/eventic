@@ -240,3 +240,20 @@ exactly one delivery; at-least-once across workflow abort (D13); transaction-
 wrapped durable save raises loudly with nothing persisted; ambient join rolls
 back a failed txn fn; explicit durable pattern end-to-end. Core (49) + plugins
 (12) + old suite (28) all green. **Committed:** Step 7.
+
+## 2026-08-04 — Session 3 (cont.) — Step 8 (Phase 4)
+
+**Step 8 — DiffStorage codec (the second real plugin).** `DiffStorage(Plugin,
+seam=CODEC, requires={"persistence:json"})` — full snapshot every K versions
+(v0 and every K-th; K tunable per subclass via ClassVar, D15), forward
+top-level field deltas otherwise; `decode` replays from the nearest snapshot;
+`fetch` returns the snapshot→target window (exact-version KeyError preserved);
+`head_state` reconstructs the true head for `where()` (D14 — pipeline-driven,
+old persistence `query` deprecated). FullSnapshot gains the same `head_state`
+hook. Size win: 50KB body edited 5× stores < 200KB (snapshot + tiny deltas).
+Guardrail: `DiffStorage + TypedTable` → `MissingCapability` at definition.
+7 tests incl. byte-for-byte equality with FullSnapshot at every version and
+the K=2 snapshot/delta pattern. **Cross-suite fix (D16):** the plugins suite
+now snapshot/restores the delivery registry (clearing it nuked the durable
+backend the dbos suite registered at collection). All 75 new tests green
+together; old suite 28 green. **Committed:** Step 8.

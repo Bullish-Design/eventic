@@ -4,7 +4,13 @@ import pytest
 
 from eventic.connect import _reset, connect
 from eventic.errors import MissingCapability, PluginConflictError
-from eventic.plugins import Seam, Plugin, _reset_delivery, _reset_globals
+from eventic.plugins import (
+    Seam,
+    Plugin,
+    _DELIVERY_INSTANCES,
+    _DELIVERY_MODES,
+    _reset_globals,
+)
 from eventic.plugins.codec import FullSnapshot
 from eventic.plugins.interceptor import Interceptor, Veto
 from eventic.plugins.persistence import SingleTableJSONB, TypedTable
@@ -13,14 +19,21 @@ from eventic.record import Record
 
 @pytest.fixture(autouse=True)
 def clean(tmp_path):
+    """Fresh engine + pristine plugin state per test. The delivery registry is
+    snapshot/restored (not cleared) so a backend registered by another suite
+    at import time (e.g. ``durable`` from ``eventic.dbos``) survives."""
     _reset()
-    _reset_delivery()
     _reset_globals()
+    modes = dict(_DELIVERY_MODES)
+    instances = dict(_DELIVERY_INSTANCES)
     connect(f"sqlite:///{tmp_path / 'e.db'}")
     yield
     _reset()
-    _reset_delivery()
     _reset_globals()
+    _DELIVERY_MODES.clear()
+    _DELIVERY_MODES.update(modes)
+    _DELIVERY_INSTANCES.clear()
+    _DELIVERY_INSTANCES.update(instances)
 
 
 class Doc(Record):

@@ -586,3 +586,24 @@ Appendix B). Each row: date · step · deviation · reason.
   race, which is loud by definition. `append` returns whether a row was
   inserted, and the pipeline delivers events only for real inserts (I7:
   a replay is not a commit).
+- **2026-08-04 · Step 8 · D14 — `where()` is pipeline-driven via a codec
+  ``head_state`` hook; the persistence ``query`` primitive is deprecated.** A
+  diff codec's *latest* row is a delta, so JSON containment against
+  ``data`` (the guide's Step 3 sketch) would match garbage for diff-stored
+  classes. The pipeline's ``where`` fetches ``(id, latest_row)`` and asks the
+  codec for the true head state (``FullSnapshot.head_state`` = the row's data;
+  ``DiffStorage.head_state`` = decode of the snapshot→head window), then
+  matches in Python. This also fixes the old `query` for full-snapshot classes
+  (same behavior) while making diff classes *correct* rather than
+  snapshot-approximate.
+- **2026-08-04 · Step 8 · D15 — per-subclass ``K`` tuning must use a
+  ``ClassVar`` annotation.** A plain ``K = 5`` on a ``Record`` subclass is
+  picked up by pydantic v2 as an unannotated model field
+  (``PydanticUserError`` / a real ``K`` field in the dump); ``K: ClassVar[int]
+  = 5`` is ignored by pydantic and read by the codec via
+  ``getattr(type(new), "K", ...)``. Documented on the plugin.
+- **2026-08-04 · Step 8 · D16 — the plugins suite snapshots/restores the
+  delivery registry instead of clearing it.** The guide's Step 6 test fixture
+  used ``_reset_delivery()`` per test; when ``eventic.dbos`` was imported at
+  collection (it is, by the dbos suite), that reset silently unregistered the
+  ``durable`` backend and the dbos suite failed when run after core/plugins.

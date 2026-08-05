@@ -138,7 +138,7 @@ class Record(BaseModel):
 
     @classmethod
     def where(cls, **filters: Any) -> list[Self]:
-        """Latest records whose data matches every (dotted-path) key/value pair.
-        Scoped to this class (``class_type``); a JSONB convenience (R-P2)."""
-        ids = cls._persistence.query(cls.__name__, filters)
-        return [cls.get(rid) for rid in ids]
+        """Latest records whose reconstructed head matches every (dotted-path)
+        key/value pair. Scoped to this class (``class_type``); a JSONB
+        convenience (R-P2). Codec-aware via ``pipeline.where``."""
+        return pipeline.where(cls, **filters)
