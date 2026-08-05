@@ -16,6 +16,7 @@ from hypothesis.strategies import booleans, text
 from pydantic import BaseModel, ValidationError
 
 from eventic.app import App
+from eventic.encodings.delta import Delta
 from eventic.envelopes import Commit, Revision
 from eventic.errors import InlineDispatchError, RevisionConflict, StoreError, UsageError
 from eventic.ids import AggregateKey
@@ -42,17 +43,19 @@ def _app() -> App:
 
 
 class FourWayMachine(RuleBasedStateMachine):
-    """Every committed revision satisfies head == replay == history[-1] == returned."""
+    """Every committed revision satisfies head == replay == history[-1] ==
+    returned == rebuilt head, under snapshot/1 and delta/1."""
 
     revisions = Bundle("revisions")
 
-    def __init__(self) -> None:
+    def __init__(self, encodings: dict[str, Any] | None = None) -> None:
         super().__init__()
-        self.store = SQLite(":memory:")
+        self.store = SQLite(":memory:", encodings=encodings)
         self.runtime: Runtime = _app().bind(self.store)
         self.todos = self.runtime._app.streams[0]
         self.audits = self.runtime._app.streams[1]
         self.known: list[Revision[Any, Any]] = []
+        self._steps = 0
 
     def _check(self, revision: Revision[Any, Any]) -> None:
         key = AggregateKey(revision.stream, revision.id)
@@ -73,6 +76,16 @@ class FourWayMachine(RuleBasedStateMachine):
             assert head is not None
             assert head.digest == revision.digest
             assert head.revision == revision.revision
+        # the fifth leg (IMPLEMENTATION_GUIDE Phase 8): rebuilding heads from
+        # the log must reproduce every known revision byte-for-byte. A full
+        # rebuild per step would dominate the runtime, so it runs periodically
+        # (every 25 steps) plus once in teardown over the whole final state.
+        # chunk=17 keeps the fold crossing chunk boundaries inside short
+        # histories.
+        self._steps += 1
+        if self._steps % 25 == 0:
+            report = self.store.admin().rebuild_heads(None, chunk=17)
+            assert report.mismatches == 0, report
 
     @rule(text=text(alphabet="abc", max_size=5))
     def create_todo(self, text: str) -> None:
@@ -110,12 +123,17 @@ class FourWayMachine(RuleBasedStateMachine):
 
     @rule(old=revisions)
     def mutate_nested_list(self, old: Revision[Any, Any]) -> None:
-        # Mutating the returned state's nested list must change nothing durable.
+        # Mutating the returned state's nested list must change nothing
+        # durable: the canonical bytes were fixed at commit time, so the head
+        # digest is unaffected (F8 tightened the old tags-literal assertion to
+        # a digest comparison — it no longer assumes tags were never set).
+        key = AggregateKey(old.stream, old.id)
+        before = self.store.head(key)
+        assert before is not None
         old.state.tags.append("sneaky")
-        head = self.store.head(AggregateKey(old.stream, old.id))
+        head = self.store.head(key)
         assert head is not None
-        assert head.digest == old.digest
-        assert head.payload["tags"] == []
+        assert head.digest == before.digest
 
     @rule(old=revisions, target=revisions)
     def batch_change(self, old: Revision[Any, Any]) -> Revision[Any, Any]:
@@ -150,17 +168,39 @@ class FourWayMachine(RuleBasedStateMachine):
         self.known.append(new)
 
     def teardown(self) -> None:
+        # final rebuild over the whole state: the fifth leg must hold after
+        # every example, not just at the periodic checkpoints.
+        report = self.store.admin().rebuild_heads(None, chunk=17)
+        assert report.mismatches == 0, report
+        for revision in self.known:
+            rebuilt = self.store.head(AggregateKey(revision.stream, revision.id))
+            assert rebuilt is not None
+            assert rebuilt.digest == revision.digest
+            assert rebuilt.revision == revision.revision
         self.store.close()
+
+
+def _machine_for(encodings: dict[str, Any] | None) -> type[FourWayMachine]:
+    class Machine(FourWayMachine):
+        def __init__(self) -> None:
+            super().__init__(encodings)
+
+    return Machine
 
 
 FourWayMachine.TestCase.settings = settings(max_examples=300, deadline=None)
 
 
 @pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_four_way_agreement() -> None:
+@pytest.mark.parametrize(
+    "encodings",
+    [None, {"todos": Delta(every=5)}],
+    ids=["snapshot/1", "delta/1"],
+)
+def test_four_way_agreement(encodings: dict[str, Any] | None) -> None:
     from hypothesis.stateful import run_state_machine_as_test
 
-    run_state_machine_as_test(FourWayMachine)
+    run_state_machine_as_test(_machine_for(encodings))
 
 
 # ---------------------------------------------------------------------------
