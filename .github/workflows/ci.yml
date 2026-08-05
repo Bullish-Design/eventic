@@ -34,6 +34,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install
         run: uv sync --extra test --extra postgres --extra migrate
+      - name: Build
+        run: uv build
       - name: Lint
         run: uv run ruff check .
       - name: Format check
@@ -42,5 +44,3 @@ jobs:
         run: uv run basedpyright
       - name: Test
         run: uv run pytest -W error
-      - name: Build
-        run: uv build

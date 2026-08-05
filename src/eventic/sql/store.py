@@ -452,6 +452,7 @@ class SQLite(Store):
     ) -> Any:
         if limit < 1:
             raise UsageError("limit must be >= 1")
+        cursor_uuid = UUID(cursor) if cursor is not None else None
         try:
             with self.engine.connect() as conn:
                 rows = (
@@ -460,7 +461,7 @@ class SQLite(Store):
                             self.dialect,
                             stream,
                             dict(filters),
-                            cursor=cursor,
+                            cursor=cursor_uuid,
                             limit=limit,
                         )
                     )

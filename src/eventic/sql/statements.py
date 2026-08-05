@@ -186,7 +186,7 @@ def search_heads(
     stream: str,
     filters: Any,
     *,
-    cursor: str | None,
+    cursor: Any,
     limit: int,
 ) -> Any:
     stmt = select(heads).where(heads.c.stream == stream)
