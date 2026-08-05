@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from ..connect import engine
 from ..errors import StaleVersionError
 from ..models import RecordRow
+from . import Plugin, Seam
 
 _MISSING = object()
 
@@ -57,10 +58,12 @@ def _dict_contains(data: Any, filter_: dict[str, Any]) -> bool:
     return all(_get_path(data, k) == v for k, v in filter_.items())
 
 
-class SingleTableJSONB:
-    """Append-only version log in the single ``records`` table."""
+class SingleTableJSONB(Plugin):
+    """Append-only version log in the single ``records`` table (the default)."""
 
+    seam = Seam.PERSISTENCE
     provides = {"persistence:json", "persistence:transactional"}
+    requires = set()
 
     # ------------------------------------------------------------------ #
     # write
@@ -140,3 +143,17 @@ class SingleTableJSONB:
                 select(latest.c.rid, latest.c.data).where(latest.c.rn == 1)
             ).all()
         return [rid for rid, data in rows if _dict_contains(data, filter_)]
+
+
+class TypedTable(Plugin):
+    """Persistence provider that gives each Record its own typed-column table.
+
+    **Demonstration of reach only — NOT implemented** (PLUGINS §8.5; see
+    ``TARGET_ARCHITECTURE.md`` §1 for the SQLModel sketch). It exists so the
+    ``DiffStorage + TypedTable`` incompatibility can be proven at class
+    definition (Step 8's guardrail test).
+    """
+
+    seam = Seam.PERSISTENCE
+    provides = {"persistence", "persistence:columns", "persistence:transactional"}
+    requires = set()

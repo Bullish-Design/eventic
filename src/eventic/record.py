@@ -22,8 +22,8 @@ from typing import Any, ClassVar, Iterator, Self
 from pydantic import BaseModel, Field
 
 from . import pipeline
+from .plugins import Plugin, assemble
 from .plugins.codec import FullSnapshot
-from .plugins.delivery import SyncDelivery
 from .plugins.identity import Uuid5Deterministic, _uuid5
 from .plugins.persistence import SingleTableJSONB
 
@@ -66,12 +66,19 @@ class Record(BaseModel):
     created_ts: datetime | None = None
     meta: dict[str, Any] = Field(default_factory=dict)  # free-form metadata bag
 
-    # exclusive-seam defaults (the null plugins, CONCEPT §7) — swapped by the
-    # class assembler at Step 6
+    # exclusive-seam defaults (the null plugins, CONCEPT §7). Each subclass's
+    # set is validated and attached by ``assemble`` at class definition (Step 6)
     _persistence: ClassVar[SingleTableJSONB] = SingleTableJSONB()
     _codec: ClassVar[FullSnapshot] = FullSnapshot()
     _identity: ClassVar[Uuid5Deterministic] = Uuid5Deterministic()
-    _delivery: ClassVar[SyncDelivery] = SyncDelivery()
+    _interceptors: ClassVar[list] = []
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # the class assembler: validate every plugin base at class definition
+        # (never at import, never at first call) and attach the seam providers
+        plugins = [b for b in cls.__bases__ if isinstance(b, type) and issubclass(b, Plugin)]
+        assemble(cls, plugins)
 
     def model_post_init(self, _):
         """PURE: stamp v0's deterministic identity only — never any I/O (I3)."""

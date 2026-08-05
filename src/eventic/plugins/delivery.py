@@ -11,14 +11,17 @@ from __future__ import annotations
 import logging
 
 from ..eventbus import Event, _HANDLERS
+from . import Plugin, Seam
 
 logger = logging.getLogger(__name__)
 
 
-class SyncDelivery:
+class SyncDelivery(Plugin):
     """Default backend: run matching sync handlers immediately, in MRO order."""
 
+    seam = Seam.DELIVERY
     provides = {"delivery"}
+    requires = set()
     mode = "sync"
 
     def deliver(self, event: Event) -> None:

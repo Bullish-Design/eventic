@@ -12,11 +12,13 @@ from __future__ import annotations
 import uuid
 
 from ..models import RecordRow
+from . import Plugin, Seam
 
 
-class FullSnapshot:
+class FullSnapshot(Plugin):
     """Every version stores the full state (the null codec)."""
 
+    seam = Seam.CODEC
     provides = {"codec"}
     requires = {"persistence:json"}
 

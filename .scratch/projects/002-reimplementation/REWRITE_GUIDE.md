@@ -540,3 +540,20 @@ Appendix B). Each row: date · step · deviation · reason.
   `test_core_is_dbos_free.py` therefore greps the new core module graph for
   dbos/fastapi imports; the fresh-interpreter assertion lands with the Step-9
   `__init__.py` rewrite and is re-verified in the Step-13 matrix.
+- **2026-08-04 · Step 6 · D7 — `assemble` computes `provided` from the
+  *effective* provider set (chosen ∪ unreplaced defaults).** The guide sketch
+  collects `provides` only from the mixin list. That breaks both directions:
+  `class Doc(Record, DiffStorage)` would raise `MissingCapability` (the default
+  `SingleTableJSONB` provides `persistence:json`, but no *mixin* does), while
+  `class Doc(Record, DiffStorage, TypedTable)` would wrongly pass (the default
+  persistence's `persistence:json` would satisfy the diff codec even though
+  `TypedTable` replaced it). `assemble` therefore builds the effective pool —
+  each exclusive seam = chosen provider or its default — and checks every
+  pool member's `requires` against the pool's unioned `provides`.
+- **2026-08-04 · Step 6 · D8 — `Plugin`/`Seam` live in `plugins/__init__.py`
+  with the default-provider imports at the bottom.** The guide's module map
+  puts "Plugin base, Seam enum, registry, the class assembler" in
+  `plugins/__init__.py`, but the default providers (in the seam submodules)
+  must subclass `Plugin` — a top-level `from .persistence import ...` would
+  create a circular import. The defaults are imported last, after the base
+  classes are defined. No behavior change.

@@ -184,3 +184,21 @@ DBOS-free invariant as a static source check.
 **Phase 1 exit gate:** 49 core tests in **1.18s** (old suite ≈35s → R-P3
 closed); old suite still 28 green. Core upholds I1–I7. Tagged `0.2.0-alpha`.
 **Committed:** Steps 4, 5; tag `0.2.0-alpha`.
+
+## 2026-08-04 — Session 3 (cont.) — Step 6 (Phase 2)
+
+**Step 6 — the five-seam plugin framework.** `Seam` enum + `EXCLUSIVE` set +
+`Plugin` base (provides/requires/priority/mode) + the delivery mode registry
+(global mode→backend; second backend for one mode conflicts; `sync` always
+exists) + `use()` global defaults + `assemble()`: conflict check on exclusive
+seams at class definition, capability resolution over the *effective* provider
+pool (D7), `__eventic_plugins__` introspection, per-class seam instances,
+interceptor priority ordering. Defaults converted to `Plugin` subclasses
+(`SingleTableJSONB`, `FullSnapshot`, `Uuid5Deterministic`, `SyncDelivery`);
+`TypedTable` shipped as the documented non-implemented stub (guardrail proof);
+`Interceptor` ABC with `Veto`. `Record.__init_subclass__` calls `assemble`
+(plugins = plugin bases in MRO). Pipeline dispatches through
+`cls._persistence/_codec/_identity/_interceptors` + the delivery registry
+(before_commit veto, after_commit isolated, after_hydrate on reads).
+Deviations D7, D8. 12 assembly tests; all 49 Phase-1 tests green *through the
+seam dispatch*; old suite still 28 green. **Committed:** Step 6.

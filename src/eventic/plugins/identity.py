@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import uuid
 
+from . import Plugin, Seam
+
 
 def _uuid5(id: uuid.UUID, version: int) -> uuid.UUID:
     """Deterministic version identity (I4): the same (id, version) always
@@ -17,10 +19,12 @@ def _uuid5(id: uuid.UUID, version: int) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"eventic:{id}:{version}")
 
 
-class Uuid5Deterministic:
+class Uuid5Deterministic(Plugin):
     """The one true identity rule (I4)."""
 
+    seam = Seam.IDENTITY
     provides = {"identity"}
+    requires = set()
 
     def version_id_for(self, id: uuid.UUID, version: int) -> uuid.UUID:
         return _uuid5(id, version)
