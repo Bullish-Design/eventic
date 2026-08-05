@@ -70,6 +70,16 @@ class EncodingError(EventicError):
 class UndecodableRevision(EventicError):
     """Round-trip verification or upcast failed for a stored revision."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        pointer: str | None = None,
+        **attrs: Any,
+    ) -> None:
+        self.pointer = pointer
+        super().__init__(message, **attrs)
+
 
 class CapabilityUnsupported(EventicError):
     """The bound store lacks a capability a declaration requires."""
