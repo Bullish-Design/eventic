@@ -626,3 +626,15 @@ Appendix B). Each row: date · step · deviation · reason.
   shutdown (`destroy()`), which stops the queue workers — the durable reindex
   never completes if you poll for it after the `with` block. Documented in the
   test.
+- **2026-08-04 · Step 10 · D20 — no second "fresh initial" revision.** The
+  guide lists "a fresh initial revision for the new schema" alongside the
+  retained chain; adding one would create a second alembic head and orphan
+  existing installs' `alembic_version`. The existing chain (initial → C6 →
+  fold) already produces the new schema for fresh installs and upgrades old
+  ones — the fold's SQLite branch uses `json_set(data,'$.meta',json(properties))`
+  (the `json()` wrapper is required — SQLite treats a TEXT argument as a JSON
+  *string* value, embedding the object text rather than the object) and
+  Alembic's batch table-rebuild to drop the column.
+- **2026-08-04 · Step 10 · D21 — SQLite Uuid storage is hex(32); raw-SQL test
+  inserts must use `.hex`.** The ORM `Uuid` type stores uuid.hex on SQLite;
+  hyphenated strings never match typed lookups.

@@ -272,3 +272,17 @@ persisted v0 → durable reindex SUCCESS; D19: wait inside the TestClient
 window). D18: old test files removed (the swap makes their imports
 impossible); old library modules stay until Step 12. 83 tests green; demo
 runs. **Committed:** Step 9.
+
+## 2026-08-04 — Session 3 (cont.) — Step 10 (Phase 5)
+
+**Step 10 — data migration.** `fold_properties_into_data` revision
+(down_revision = a1b2c3d4e5f6, so the C6 dedupe+unique backfill runs FIRST):
+PG `jsonb_set` fold + `DROP COLUMN`; SQLite `json_set(data,'$.meta',
+json(properties))` + Alembic batch table-rebuild (D20: the `json()` wrapper
+parses the TEXT — without it the object becomes a JSON string; D21: raw-SQL
+test inserts must use `.hex` for the Uuid storage format). Downgrade re-adds
+`properties` from `data.meta` on both dialects. No second "fresh initial"
+(D20 — one linear chain). Tests: old-library row hydrates under the new
+library with `meta` folded; upgrade/downgrade round-trips on SQLite; the
+fold's downgrade rebuilds properties from meta; a `postgres`-marked PG
+round-trip (skipped here — CI). 3 passed + 1 skipped. **Committed:** Step 10.
