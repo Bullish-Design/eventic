@@ -87,13 +87,6 @@ def test_store_conformance_on_postgres() -> None:
     assert not failed, summary(results)
 
 
-def test_concurrent_drainers_scenario_active() -> None:
-    from eventic.testing.conformance import scenarios
-
-    names = [s.name for s in scenarios.SCENARIOS if "concurrent" in s.name]
-    assert not names  # concurrent drainer scenarios land in Phase 10
-
-
 def test_schema_parity_create_all_vs_alembic() -> None:
     assert PG_URL
     engine = create_engine(PG_URL)
@@ -117,9 +110,7 @@ def test_schema_parity_create_all_vs_alembic() -> None:
 
     # create_all cannot create alembic_version (it is alembic bookkeeping, not
     # part of the eventic metadata), so compare only the eventic tables.
-    assert created_tables - {"alembic_version"} == migrated_tables - {
-        "alembic_version"
-    }
+    assert created_tables - {"alembic_version"} == migrated_tables - {"alembic_version"}
 
 
 def test_alembic_check_clean_on_create_all_database() -> None:

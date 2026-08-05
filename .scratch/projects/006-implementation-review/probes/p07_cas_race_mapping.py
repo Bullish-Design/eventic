@@ -1,27 +1,37 @@
-"""The CAS read takes no row lock; a lost race maps to StoreError, not RevisionConflict.
+"""Regression probe: a lost CAS race surfaces as RevisionConflict, not StoreError.
 
-ARCHITECTURE.md §4.3 step 1:
-  "Read the head row for (stream, aggregate_id) with row-level locking."
-  "Constraint violation on (stream, aggregate_id, revision) also maps to
-   RevisionConflict. The unique index is the backstop, the CAS is the diagnosis."
+F2 (006 review) had three parts, all in `src/eventic/sql/`:
+  1. `store.py` called `select_head(..., for_update=False)` at the only CAS
+     call site, so `with_for_update()` was unreachable — on Postgres two
+     writers with the same expected_revision both passed the CAS.
+  2. `Postgres._install_events` was `pass` — no BEGIN IMMEDIATE equivalent.
+  3. `commit()` wrapped everything in `except Exception -> StoreError`; there
+     was no IntegrityError arm, so the unique-index backstop could never
+     produce RevisionConflict, and the documented optimistic-retry loop did
+     not retry.
 
-`sql/store.py` calls `st.select_head(..., for_update=False)` unconditionally, and
-`with_for_update()` in statements.py is unreachable. On SQLite this is masked by
-`BEGIN IMMEDIATE` (one writer at a time). On Postgres — the production backend,
-default READ COMMITTED, `Postgres._install_events` is a no-op — two writers with
-the same expected_revision both pass the CAS and race to the INSERT.
+Fixed (007 Phase 2):
+  1. The CAS read passes `for_update=True` (Postgres emits FOR UPDATE; SQLite
+     ignores it). One line covers both backends.
+  2. `commit()` maps a unique-constraint violation on
+     `(stream, aggregate_id, revision)` — or its deterministic revision_id
+     primary key — to RevisionConflict. Other constraint violations (empty
+     stream name, empty intent queue, kind/revision mismatch) still surface
+     as StoreError.
+  3. The race canary is parameterised over a store factory and runs on
+     SQLite and Postgres, under both encodings; the declarative suite gained
+     capability-gated concurrency scenarios.
 
-This probe simulates the interleaving deterministically on SQLite by inserting
-the colliding row after the CAS read but before the INSERT, then shows which
-exception the caller sees.
+Run: devenv shell -- uv run python .scratch/.../probes/p07_cas_race_mapping.py
 """
 
 from __future__ import annotations
 
+import inspect
 import uuid
+from datetime import UTC, datetime
 
 from eventic.errors import RevisionConflict, StoreError
-from eventic.ids import AggregateKey
 from eventic.jsonx import canonical_bytes, digest
 from eventic.sql import statements as st
 from eventic.sql.store import SQLite
@@ -46,15 +56,14 @@ def request(text: str, expected: int | None, kind: str) -> CommitRequest:
     )
 
 
-print("=== the lock that is never taken ===")
-import inspect  # noqa: E402
-
+print("=== the lock is now taken at the CAS call site ===")
 src = inspect.getsource(SQLite._commit_one)
 for line in src.splitlines():
     if "select_head" in line or "for_update" in line:
         print("  store.py:", line.strip())
-print("  statements.py: with_for_update() is only reachable via for_update=True,")
-print("                 which no call site passes.")
+assert "for_update=True" in src, "the CAS read must take the row lock"
+print("  -> select_head(..., for_update=True): FOR UPDATE on Postgres,")
+print("     ignored on SQLite. read-path head() stays for_update=False.")
 
 print("\n=== simulate the Postgres interleaving ===")
 store = SQLite(":memory:")
@@ -65,12 +74,12 @@ raced = {"done": False}
 
 
 def race_in_between(self, conn, stream, aggregate_id, revision):  # type: ignore[no-untyped-def]
-    """Stand in for a concurrent writer that commits between our CAS and INSERT.
+    """Stand in for a concurrent writer that committed between our CAS and INSERT.
 
     We cannot hook between the CAS and the INSERT directly, so we insert the
     colliding row on the first _decode_log_revision call, which runs
-    immediately after the INSERT — the same constraint outcome the real race
-    produces, one statement later.
+    immediately after the INSERT — the same unique-constraint outcome the real
+    race produces, one statement later.
     """
     if not raced["done"]:
         raced["done"] = True
@@ -90,7 +99,7 @@ def race_in_between(self, conn, stream, aggregate_id, revision):  # type: ignore
                     "payload": {"text": "other-writer"},
                     "digest": digest(payload),
                     "meta": {},
-                    "committed_at": "2026-01-01 00:00:00",
+                    "committed_at": datetime.now(UTC),
                 },
             )
         )
@@ -110,17 +119,18 @@ finally:
 
 print(f"  caller sees -> {outcome}")
 print()
-print("  §4.3 requires RevisionConflict. A caller running the documented")
-print("  optimistic-retry loop:")
-print("      try: col.change(rev, ...)")
-print("      except RevisionConflict: reload and retry")
-print("  does not retry — it sees an opaque StoreError and treats a routine")
+print("  §4.3 requires RevisionConflict so the documented optimistic-retry")
+print("  loop reloads and retries. An opaque StoreError would treat a routine")
 print("  write conflict as a backend failure.")
-assert outcome.startswith("StoreError"), outcome
+assert outcome.startswith("RevisionConflict"), outcome
+print("\nOK: the constraint backstop surfaces as RevisionConflict.")
 
 print("\n=== the canary's coverage ===")
-print("  tests/conformance/test_race_canary.py builds SQLite(...) only.")
-print("  tests/conformance/test_postgres.py runs the declarative suite, which")
-print("  contains no concurrency scenarios — test_concurrent_drainers_scenario_active")
-print("  asserts `not names`, i.e. that they are absent.")
+print("  tests/conformance/test_race_canary.py is parameterised over a store")
+print("  factory: SQLite always, Postgres when EVENTIC_PG_URL is set, under")
+print("  both encodings. The declarative suite gained concurrency scenarios:")
+print("  'same-expected-revision race has exactly one winner',")
+print("  'concurrent create of the same aggregate has exactly one winner',")
+print("  'concurrent drainers claim each intent exactly once' (capability-")
+print("  gated on concurrent_drainers).")
 store.close()

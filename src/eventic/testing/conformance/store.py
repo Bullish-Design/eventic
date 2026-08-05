@@ -130,6 +130,44 @@ class Wait(Step):
     seconds: float
 
 
+@dataclass(frozen=True, slots=True)
+class Race(Step):
+    """N writers race one (stream, id, expected_revision) on the same store.
+
+    Exactly one writer wins; every other writer must get ``RevisionConflict``
+    (a lost race is loud, I7). Each writer uses a distinct payload so a loser
+    can never be absorbed as an identical replay. A non-conflict outcome
+    (e.g. ``StoreError``) fails the step — that is what catches an F2-style
+    regression in the error mapping.
+    """
+
+    stream: str
+    aggregate_id: UUID
+    expected_revision: int | None
+    kind: str = "change"
+    writers: int = 8
+    schema_version: int = 1
+    meta_version: int = 1
+    fingerprint: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ConcurrentDrainers(Step):
+    """Several drainers claim the same queue concurrently.
+
+    Requires the ``concurrent_drainers`` capability (row-level claim locking).
+    Every claimable intent must be claimed once across all drainers: no
+    intent claimed twice (which would break the lease model) and none left
+    unclaimed when the total is within the drainers' combined limits.
+    """
+
+    queue: str
+    drainers: int = 3
+    limit: int = 1
+    expect_total: int = 0
+    lease: timedelta = timedelta(seconds=1)
+
+
 @dataclass(frozen=True)
 class Scenario:
     name: str

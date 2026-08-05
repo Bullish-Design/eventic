@@ -45,7 +45,7 @@ def test_conformance_suite_green_on_sqlite(tmp_path: Path) -> None:
     finally:
         for s in stores:
             s.close()
-    failed = [r for r in results if not r.passed]
+    failed = [r for r in results if not r.passed and not r.skipped]
     assert not failed, summary(results)
 
 

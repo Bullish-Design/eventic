@@ -15,6 +15,7 @@ from uuid import UUID, uuid5
 from sqlalchemy import create_engine, func, select
 from sqlalchemy import event as sa_event
 from sqlalchemy.engine import Connection, RowMapping
+from sqlalchemy.exc import IntegrityError
 
 from eventic.encodings import Encoding, get_encoding
 from eventic.errors import (
@@ -54,6 +55,22 @@ def _json_loads(value: Any) -> JsonObject:
     if isinstance(value, dict):
         return cast(JsonObject, value)  # postgres already parsed
     return json.loads(value)
+
+
+def _is_revision_race(exc: IntegrityError) -> bool:
+    """Is this violation the ``(stream, aggregate_id, revision)`` backstop?
+
+    Only the unique index (or its deterministic ``revision_id`` primary key)
+    means a lost write race — every other constraint violation (bad stream
+    name, empty intent queue, kind/revision mismatch) is a genuine caller
+    bug and must stay ``StoreError``.
+    """
+    orig = exc.orig
+    constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+    if constraint in ("uq_revision", "eventic_revision_pkey"):
+        return True
+    message = str(orig)
+    return "UNIQUE constraint failed: eventic_revision" in message
 
 
 def _now(conn: Connection) -> datetime:
@@ -141,6 +158,18 @@ class SQLite(Store):
                 results = [self._commit_one(conn, request, now) for request in requests]
         except EventicError:
             raise
+        except IntegrityError as exc:
+            # §4.3 step 1: the unique index on (stream, aggregate_id, revision)
+            # is the backstop. On Postgres the CAS read locks the head row, but
+            # a concurrent *create* of a brand-new aggregate has no row to lock,
+            # so both writers pass the CAS and the loser lands here. A lost race
+            # must surface as RevisionConflict, not as an opaque StoreError, or
+            # the documented optimistic-retry loop does not retry.
+            if not _is_revision_race(exc):
+                raise StoreError("commit failed") from exc
+            raise RevisionConflict(
+                "concurrent write to the same revision",
+            ) from exc
         except Exception as exc:  # noqa: BLE001
             raise StoreError("commit failed") from exc
         return results
@@ -155,7 +184,7 @@ class SQLite(Store):
 
         head_row = (
             conn.execute(
-                st.select_head(request.stream, request.aggregate_id, for_update=False)
+                st.select_head(request.stream, request.aggregate_id, for_update=True)
             )
             .mappings()
             .first()

@@ -8,6 +8,7 @@ name. The future async runner is a second file sharing this vocabulary.
 from __future__ import annotations
 
 import dataclasses
+import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -15,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from eventic.errors import EventicError
+from eventic.errors import EventicError, RevisionConflict
 from eventic.ids import AggregateKey
 from eventic.jsonx import JsonObject
 from eventic.protocols import Capabilities, Store
@@ -24,9 +25,11 @@ from eventic.testing.conformance.store import (
     Batch,
     Claim,
     Commit,
+    ConcurrentDrainers,
     Exact,
     Head,
     History,
+    Race,
     Scenario,
     Search,
     Settle,
@@ -273,7 +276,96 @@ def _run_step(store: Store, ctx: _Context, step: Step) -> None:
         time.sleep(step.seconds)
         return
 
+    if isinstance(step, Race):
+        _run_race(store, step)
+        return
+
+    if isinstance(step, ConcurrentDrainers):
+        _run_concurrent_drainers(store, step)
+        return
+
     raise StepFailure(f"unknown step op {type(step).__name__}")
+
+
+def _run_race(store: Store, step: Race) -> None:
+    from eventic.jsonx import canonical_bytes, digest
+
+    barrier = threading.Barrier(step.writers)
+    results: list[str] = []
+    lock = threading.Lock()
+
+    def writer(i: int) -> None:
+        barrier.wait()
+        payload = canonical_bytes({"racer": i})
+        request = CommitRequest(
+            stream=step.stream,
+            aggregate_id=step.aggregate_id,
+            expected_revision=step.expected_revision,
+            kind=step.kind,  # type: ignore[arg-type]
+            schema_version=step.schema_version,
+            payload=payload,
+            digest=digest(payload),
+            meta=canonical_bytes({}),
+            meta_version=step.meta_version,
+            fingerprint=step.fingerprint,
+        )
+        try:
+            store.commit([request])
+            outcome = "ok"
+        except RevisionConflict:
+            outcome = "conflict"
+        except Exception:  # noqa: BLE001
+            outcome = "other"
+        with lock:
+            results.append(outcome)
+
+    threads = [threading.Thread(target=writer, args=(i,)) for i in range(step.writers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    if any(t.is_alive() for t in threads):
+        raise StepFailure("a race writer hung")
+    ok = results.count("ok")
+    conflict = results.count("conflict")
+    other = [r for r in results if r not in ("ok", "conflict")]
+    if other:
+        raise StepFailure(f"race produced non-Conflict outcomes: {other}")
+    if ok != 1:
+        raise StepFailure(f"race had {ok} winners, expected exactly 1")
+    if conflict != step.writers - 1:
+        raise StepFailure(f"race had {conflict} conflicts, expected {step.writers - 1}")
+
+
+def _run_concurrent_drainers(store: Store, step: ConcurrentDrainers) -> None:
+    claimed_sets: list[set[UUID]] = []
+    lock = threading.Lock()
+
+    def drainer() -> None:
+        claimed = list(store.claim(step.queue, limit=step.limit, lease=step.lease))
+        with lock:
+            claimed_sets.append({c.intent_id for c in claimed})
+
+    threads = [threading.Thread(target=drainer) for _ in range(step.drainers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    if any(t.is_alive() for t in threads):
+        raise StepFailure("a drainer hung")
+    union: set[UUID] = set()
+    for claimed in claimed_sets:
+        union |= claimed
+    total = sum(len(s) for s in claimed_sets)
+    if total != len(union):
+        raise StepFailure(
+            f"an intent was claimed by two drainers ({total} claims for "
+            f"{len(union)} distinct intents)"
+        )
+    if len(union) != step.expect_total:
+        raise StepFailure(
+            f"drainers claimed {len(union)} of {step.expect_total} intents"
+        )
 
 
 def run_scenario(

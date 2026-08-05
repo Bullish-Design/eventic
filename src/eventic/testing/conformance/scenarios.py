@@ -13,8 +13,10 @@ from eventic.testing.conformance.store import (
     Batch,
     Claim,
     Commit,
+    ConcurrentDrainers,
     History,
     Payload,
+    Race,
     Scenario,
     Search,
     Settle,
@@ -639,6 +641,65 @@ ERRORS: tuple[Scenario, ...] = (
     ),
 )
 
+# ---------------------------------------------------------------------------
+# Concurrency (I7): lost races are loud on both backends
+# ---------------------------------------------------------------------------
+
+CONCURRENCY: tuple[Scenario, ...] = (
+    Scenario(
+        "same-expected-revision race has exactly one winner",
+        steps=(
+            _commit("todos", _A, None, "create", _DOC1),
+            Race(
+                name="eight writers race one revision",
+                stream="todos",
+                aggregate_id=_A,
+                expected_revision=0,
+                writers=8,
+            ),
+            head_step("todos", _A, expect_revision=1),
+        ),
+    ),
+    Scenario(
+        "concurrent create of the same aggregate has exactly one winner",
+        steps=(
+            Race(
+                name="eight writers race one create",
+                stream="todos",
+                aggregate_id=_A,
+                expected_revision=None,
+                kind="create",
+                writers=8,
+            ),
+            head_step("todos", _A, expect_revision=0),
+        ),
+    ),
+    Scenario(
+        "concurrent drainers claim each intent without overlap",
+        requires=frozenset({"concurrent_drainers"}),
+        steps=(
+            _commit(
+                "todos",
+                _A,
+                None,
+                "create",
+                _DOC1,
+                intents=(
+                    intent("sub.a", _rid("todos", _A, 0)),
+                    intent("sub.b", _rid("todos", _A, 0)),
+                ),
+            ),
+            ConcurrentDrainers(
+                name="two drainers split two intents",
+                queue="q",
+                drainers=2,
+                limit=1,
+                expect_total=2,
+            ),
+        ),
+    ),
+)
+
 SCENARIOS: tuple[Scenario, ...] = (
     *CAS,
     *REPLAY,
@@ -649,4 +710,5 @@ SCENARIOS: tuple[Scenario, ...] = (
     *HEAD_TIME,
     *INTENTS,
     *ERRORS,
+    *CONCURRENCY,
 )
