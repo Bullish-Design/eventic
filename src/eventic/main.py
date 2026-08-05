@@ -1,100 +1,96 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "eventic[pg]",
-#     "uvicorn",
-# ]
-# ///
+"""Eventic webhook server.
+
+Run with ``uvicorn eventic.main:app`` (see dbos-config.yaml). The database
+URL comes from ``DBOS_DATABASE_URL`` when set, otherwise from ``POSTGRES_*``
+env vars (docker-compose style).
+"""
 
 from __future__ import annotations
 
-import os
-import uvicorn
-from eventic import Eventic, Record, on
-from fastapi import Request
 import json
-from datetime import datetime
-from pathlib import Path
+import os
+from datetime import datetime, timezone
 
+import uvicorn
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from eventic import Eventic, Record
 
 load_dotenv()
 
-POSTGRES_DB = os.environ["POSTGRES_DB"]
-POSTGRES_USER = os.environ["POSTGRES_USER"]
-POSTGRES_PASSWORD = os.environ["POSTGRES_PASSWORD"]
 
-db_url = (
-    "postgresql://"
-    + POSTGRES_USER
-    + ":"
-    + POSTGRES_PASSWORD
-    + "@postgres:5432/"
-    + POSTGRES_DB
-)
+def _default_db_url() -> str:
+    if os.environ.get("DBOS_DATABASE_URL"):
+        return os.environ["DBOS_DATABASE_URL"]
+    return (
+        "postgresql://"
+        + os.environ.get("POSTGRES_USER", "")
+        + ":"
+        + os.environ.get("POSTGRES_PASSWORD", "")
+        + "@"
+        + os.environ.get("POSTGRES_HOST", "postgres")
+        + ":"
+        + os.environ.get("POSTGRES_PORT", "5432")
+        + "/"
+        + os.environ.get("POSTGRES_DB", "eventic")
+    )
 
-print(f"\nConnecting to Postgres at {db_url}\n")
 
+class WebhookStory(Record):
+    """Story-like log entry for the webhook.
 
-# ────────────────────────────────── 3. Concrete Record ─────────────────────────────────
-class Story(Record):
+    Named uniquely (not Story) because DBOS's queue registry is keyed by the
+    derived queue name (queue_story) — two same-named Record classes cannot
+    coexist in one process.
+    """
+
     title: str | None = None
     body: str | None = None
 
-    # @property
     def _format_story(self) -> str:
         return f"\nTitle: {self.title}\n\n  {self.body}\n\n"
 
 
-def main() -> None:
-    """Minimal Eventic server."""
-    # db_url = db_url  # os.getenv("DBOS_DATABASE_URL")
-    if not db_url:
-        raise ValueError("DBOS_DATABASE_URL required")
+class WebhookPayload(BaseModel):
+    """Strict input schema.
 
-    # Create minimal FastAPI app with Eventic
-    app = Eventic.create_app("eventic-server", db_url=db_url)
+    NO version/id/version_id/properties fields — they are aggregate-managed
+    and must never come from a client (M6).
+    """
 
-    @app.get("/")
-    def health() -> dict[str, str]:
-        return {"status": "running"}
+    title: str | None = None
+    body: str | None = None
+
+
+def build_app(*, db_url: str | None = None) -> FastAPI:
+    """Create the FastAPI app wired to a fresh Eventic instance."""
+    app = Eventic.create_app("eventic-server", db_url=db_url or _default_db_url())
 
     @app.post("/webhook")
-    async def webhook(request: Request):
+    async def webhook(payload: WebhookPayload):
         """Log any incoming JSON to file."""
-        try:
-            # Get request body
-            body = await request.json()
+        story = WebhookStory(
+            title=payload.title, body=payload.body
+        )  # v0 auto-persisted (C5)
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "body": payload.model_dump(),
+            "story": story.model_dump_json(),
+        }
+        print(json.dumps(log_entry))
+        return {"status": "logged", "id": str(story.id)}
 
-            # Create an instance of Story:
-            story = Story(**body)
+    return app
 
-            # Add metadata
-            log_entry = {
-                "timestamp": datetime.utcnow().isoformat(),
-                "headers": dict(request.headers),
-                "source_ip": request.client.host if request.client else None,
-                "body": body,
-                "story": story.model_dump_json(),  # Convert Story to dict
-            }
 
-            ## Append to JSONL file
-            # with open(LOG_FILE, "a") as f:
-            #    f.write(json.dumps(log_entry) + "\n")
-            print(f"{json.dumps(log_entry, indent=2)}\n")
-            print(f"✓ Logged webhook from {log_entry['source_ip']}")
+app = build_app()  # module-level object for `uvicorn eventic.main:app`
 
-            return {
-                "status": "logged",
-                "Request:": log_entry,
-            }
 
-        except Exception as e:
-            print(f"✗ Error: {e}")
-            return {"status": "error", "message": str(e)}, 400
-
-    # Run server
+def main() -> None:
+    """Run the server (dev convenience; uvicorn is the normal entry point)."""
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

@@ -17,6 +17,7 @@ dependencies = [
     "psycopg[binary]>=3.1",      # single driver; matches DBOS's internal psycopg3 engine
     "pydantic>=2.0",             # Record/PropertiesBase are pydantic models
     "python-dotenv>=1.1.1",
+    "uvicorn>=0.30",             # dbos-config start command runs eventic.main:app
 ]
 
 [project.optional-dependencies]
@@ -24,6 +25,7 @@ pg = []                          # pg is now the default path; kept for README c
 test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "httpx>=0.27",   # fastapi TestClient
 ]
 
 [project.scripts]

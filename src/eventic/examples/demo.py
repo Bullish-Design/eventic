@@ -53,7 +53,6 @@ class Story(Record):
 
 
 ## Access the auto-generated queue (defined by RecordMeta → queue_story)
-# story_queue = Eventic.queue(Story._queue_name)
 
 
 # ────────────────────────────────── 4. DBOS steps ──────────────────────────────────────
@@ -84,10 +83,8 @@ def publish(story_id: uuid.UUID) -> None:
     # s.title = title  # version bump
     # s.properties.add(status="published")
 
-    # ---- add published flag *and* ensure a new version is persisted ----
-    props = s.properties  # same object, but we'll re‑assign below
-    props.add(status="published")
-    s.properties = props
+    # H1: add() persists a new version automatically
+    s.properties.add(status="published")
 
 
 @Eventic.step()
@@ -101,17 +98,14 @@ def snapshot(story_id: uuid.UUID):
 def add_property(story_id: uuid.UUID, key: str, value: str) -> None:
     """Add an arbitrary key/value pair to the Story.properties bag."""
     s = Story.hydrate(story_id)
-    s.properties.add(**{key: value})
-    s.properties = s.properties  # trigger version bump
+    s.properties.add(**{key: value})  # H1: persists automatically
 
 
 @Eventic.transaction()
 def tag_extra(story_id: uuid.UUID, **kv) -> None:
     """Generic helper that adds an arbitrary property (creates new version)."""
     s = Story.hydrate(story_id)
-    props = s.properties
-    props.add(**kv)
-    s.properties = props
+    s.properties.add(**kv)  # H1: persists automatically
 
 
 # Event handlers using @on decorators
@@ -152,7 +146,6 @@ def end_to_end_demo() -> dict:
     Story.queue.enqueue(snapshot, sid)
 
     Story.queue.enqueue(tag_extra, sid, reviewed=True)  # <- final property
-    # story_queue.enqueue(snapshot, sid)
 
     # Wait until queue tasks finish (simple polling)
     handle = Story.queue.enqueue(snapshot, sid)
@@ -174,7 +167,6 @@ def end_to_end_demo() -> dict:
 # ────────────────────────────────── 6. Run worker & fire the workflow ────────────────
 def main():
     # from dbos import DBOSRunner
-    Eventic.init(name="eventic-demo", database_url=db_url)
     Eventic.launch()  # starts DBOS worker threads
     # DBOS().run_in_background()  # starts worker threads locally
     result = end_to_end_demo()
