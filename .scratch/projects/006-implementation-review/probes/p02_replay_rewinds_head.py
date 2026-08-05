@@ -1,16 +1,14 @@
-"""Replay detection rewinds the head to an older revision.
+"""Regression probe: replay of a superseded revision must not rewind the head.
 
-`SQLite._commit_one` reads the head row, then checks whether a log row already
-exists at the target revision. If one does and `_is_identical` holds, it calls
-`_upsert_head_from_row(conn, existing, ...)` — which upserts the head from
-*that* row. Nothing compares the existing row's revision to the current head's.
+F1 (006 review): `SQLite._commit_one` used to upsert the head from whatever
+log row matched the replay target, so re-sending an already-committed revision
+N while the aggregate had advanced to M > N rewound the head to N's state.
+That violated I2 (head derived from the log) and made at-least-once retries
+silently corrupt reads.
 
-So replaying an already-committed revision N while the aggregate has since
-advanced to M > N overwrites the head with revision N's state.
-
-Violates I2 (head is derived from the log and must equal the latest revision)
-and CONCEPT.md §12 item 5. Reachable from ordinary at-least-once retry: the
-replay path exists precisely so a client may safely re-send a commit.
+Fixed (007 Phase 1): the head write is guarded — it happens only when the head
+is missing (repair) or the replayed row is newer than the head. A superseded
+replay now returns `replayed=True` and leaves the head alone.
 
 Run: devenv shell -- uv run python .scratch/.../probes/p02_replay_rewinds_head.py
 """
@@ -58,14 +56,14 @@ print("  log latest    :", store.revision(key, 2).revision, store.revision(key, 
 head = store.head(key)
 latest = store.revision(key, 2)
 assert results[0].replayed is True
-assert head.revision == 1, f"expected the bug: head rewound, got {head.revision}"
-assert head.digest != latest.digest
+assert head.revision == 2, f"head rewound to {head.revision}"
+assert head.digest == latest.digest
 
-print("\nCONFIRMED: head rewound from revision 2 to revision 1.")
-print("           head.digest != log[2].digest -> I2 violated;")
-print("           ev[todos].get(id) now returns stale state 'b', not 'c'.")
+print("\nOK: head stayed at revision 2; head.digest == log[2].digest -> I2 holds.")
 
 # The user-visible consequence, through the public API only:
-stale = ev[todos].get(r0.id)
-print("\n  ev[todos].get(id).state.text =", repr(stale.state.text), "(should be 'c')")
-assert stale.state.text == "b"
+fresh = ev[todos].get(r0.id)
+print("  ev[todos].get(id).state.text =", repr(fresh.state.text), "(stays 'c')")
+assert fresh.state.text == "c"
+print("\nREGRESSION PROBE PASSED: superseded replay is a no-op on the head.")
+store.close()

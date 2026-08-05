@@ -189,6 +189,29 @@ REPLAY: tuple[Scenario, ...] = (
             ),
         ),
     ),
+    Scenario(
+        "replay of a superseded revision leaves the head alone",
+        steps=(
+            _commit("todos", _A, None, "create", _DOC1),
+            _commit("todos", _A, 0, "change", _DOC2),
+            _commit("todos", _A, 1, "change", _DOC3),
+            _commit(
+                "todos",
+                _A,
+                0,
+                "change",
+                _DOC2,
+                expect_replayed=True,
+                expect_revision=1,
+            ),
+            head_step(
+                "todos",
+                _A,
+                expect_revision=2,
+                expect_digest=digest(canonical_bytes(_DOC3)),
+            ),
+        ),
+    ),
 )
 
 # ---------------------------------------------------------------------------

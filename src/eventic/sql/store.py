@@ -170,7 +170,12 @@ class SQLite(Store):
 
         if existing is not None:
             if self._is_identical(existing, request):
-                self._upsert_head_from_row(conn, existing, request, rid, now)
+                # Replay: the row already exists. The head must never move
+                # backwards — a superseded replay is a no-op on the head
+                # (I2). Only write the head when it is missing (repair) or
+                # behind the row we are replaying.
+                if head_row is None or head_row["revision"] < existing["revision"]:
+                    self._upsert_head_from_row(conn, existing, request, rid, now)
                 return CommitResult(
                     stream=request.stream,
                     aggregate_id=request.aggregate_id,
