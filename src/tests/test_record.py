@@ -176,3 +176,118 @@ def test_hydrate_at_version(eventic):
     assert v1.body == "v1" and v1.title == "v0" and v1.version == 1
     assert v2.title == "v2" and v2.body == "v1" and v2.version == 2
     assert latest.version == 2
+
+
+class TypedRecord(Record):
+    count: int = 0
+    flag: bool = False
+
+
+def test_properties_add_persists_new_version(eventic):
+    """H1: props.add() writes a new version automatically."""
+    s = Story(title="t")
+    s.properties.add(status="published")
+    fresh = Story.hydrate(s.id)
+    assert fresh.version == 1
+    assert fresh.properties.status == "published"
+    assert fresh.properties.record_type == "Story"
+
+
+def test_properties_remove_persists(eventic):
+    """H1: props.remove() writes a new version automatically."""
+    s = Story(title="t")
+    s.properties.add(status="published", audience="kids")
+    s.properties.remove("status")
+    fresh = Story.hydrate(s.id)
+    assert fresh.version == 2
+    assert "status" not in fresh.properties.list()
+    assert fresh.properties.audience == "kids"
+
+
+def test_detached_properties_do_not_write(eventic):
+    """H1: a bag not bound to a record must not write."""
+    from eventic.core.properties import PropertiesBase
+
+    s = Story(title="t")
+    detached = PropertiesBase(record_type="Story")
+    detached.add(status="draft")
+    assert detached._owner is None
+    assert Story.hydrate(s.id).version == 0  # nothing written
+
+
+def test_local_state_matches_persisted_state_after_coercion(eventic):
+    """H7: the local object reflects the *validated* value, matching the DB."""
+    t = TypedRecord()
+    t.count = 5
+    t.count = "7"  # str -> coerced to int 7
+    fresh = TypedRecord.hydrate(t.id)
+    assert t.count == 7 and fresh.count == 7
+    assert t.model_dump(mode="json") == fresh.model_dump(mode="json")
+    assert isinstance(t.count, int) and not isinstance(t.count, str)
+
+
+def test_noop_assignment_does_not_create_version(eventic):
+    """L4: assigning the same value must not create a version."""
+    s = Story(title="t")
+    s.title = "t"  # same value -> no-op
+    s.body = None  # already None -> no-op
+    assert Story.hydrate(s.id).version == 0  # only v0
+    s.body = "x"
+    assert Story.hydrate(s.id).version == 1
+
+
+def test_derived_fields_cannot_be_assigned(eventic):
+    """M9: version/version_id/id are aggregate-managed and not assignable."""
+    s = Story(title="t")
+    with pytest.raises(AttributeError):
+        s.version = 99
+    with pytest.raises(AttributeError):
+        s.version_id = uuid.uuid4()
+    with pytest.raises(AttributeError):
+        s.id = uuid.uuid4()
+
+
+def test_handlers_keyed_by_class_object(eventic):
+    """H6: a handler for Story must not fire for a different class."""
+    calls = []
+
+    @on.create(Story)
+    def handler(story):
+        calls.append(story.title)
+
+    Story(title="story-fired")
+    Note(text="note-not-fired")
+    assert calls == ["story-fired"]
+
+
+def test_failing_handler_does_not_break_mutation(eventic):
+    """H6: a failing handler must not break the emitting construction."""
+    calls = []
+
+    @on.create(Story)
+    def bad(story):
+        raise RuntimeError("boom")
+
+    @on.create(Story)
+    def good(story):
+        calls.append(story.title)
+
+    s = Story(title="ok")  # bad raises internally; construction must not break
+    assert calls == ["ok"]
+    assert Story.hydrate(s.id).title == "ok"
+
+
+def test_handler_order_is_registration_order(eventic):
+    """H6: handlers run in registration order."""
+    order = []
+
+    @on.create(Story)
+    def first(story):
+        order.append("first")
+
+    @on.create(Story)
+    def second(story):
+        order.append("second")
+
+    Story(title="x")
+    assert order == ["first", "second"]

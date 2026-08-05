@@ -77,10 +77,12 @@ class Record(BaseModel, metaclass=RecordMeta):
                 "properties",
                 PropertiesBase(record_type=self.__class__.__name__),
             )
-            self.properties._bind(self)  # H1 — see Step 5.1
+            self.properties._bind(self)  # H1 — mutations persist automatically
         elif self.properties.record_type == "":
             object.__setattr__(self.properties, "record_type", self.__class__.__name__)
             self.properties._bind(self)
+        else:
+            self.properties._bind(self)  # copies re-hydrated from snapshots too
 
         if is_new and self.version == 0:
             from eventic.events import emit_create
@@ -93,6 +95,12 @@ class Record(BaseModel, metaclass=RecordMeta):
     def __setattr__(self, name: str, value: Any):
         if name.startswith("_"):
             return super().__setattr__(name, value)
+        if name in {"version", "version_id"}:
+            raise AttributeError(
+                f"{name} is derived from aggregate history and cannot be assigned directly"
+            )
+        if name == "id":
+            raise AttributeError("id is the aggregate identity; it cannot be reassigned")
 
         data = self.model_dump(mode="python")
         data[name] = value
@@ -104,14 +112,36 @@ class Record(BaseModel, metaclass=RecordMeta):
             uuid.uuid5(uuid.NAMESPACE_URL, f"eventic:{self.id}:{data['version']}")
         )
 
-        new_obj = self.__class__(**data)  # type: ignore[arg-type]
+        new_obj = self.__class__(**data)  # type: ignore[arg-type]  # H7: validate the WHOLE model first
+
+        # L4: no-op guard — identical content (ignoring version/version_id)
+        # means nothing actually changed; don't write a pointless version.
+        current = self.model_dump(mode="python")
+        current.pop("version", None)
+        current.pop("version_id", None)
+        candidate = new_obj.model_dump(mode="python")
+        candidate.pop("version", None)
+        candidate.pop("version_id", None)
+        if current == candidate:
+            return
+
+        self._commit(new_obj)
+
+    def _commit(self, new_obj: "Record") -> None:
+        """Append `new_obj` as a new version and reflect the **validated** state
+        locally, so local == persisted (H7). Shared by __setattr__ and
+        PropertiesBase._persist (H1)."""
         self._ensure_store()
         self._store.append(new_obj)  # type: ignore[union-attr]
 
-        # reflect locally
-        object.__setattr__(self, name, value)
-        object.__setattr__(self, "version", data["version"])
-        object.__setattr__(self, "version_id", uuid.UUID(data["version_id"]))
+        # Reflect the **validated** state via attribute access (not model_dump,
+        # which would serialize nested models to dicts and corrupt field types).
+        for field in new_obj.__class__.model_fields:
+            object.__setattr__(self, field, getattr(new_obj, field))
+        for k, v in (new_obj.__pydantic_extra__ or {}).items():
+            object.__setattr__(self, k, v)
+        object.__setattr__(self, "version", new_obj.version)
+        object.__setattr__(self, "version_id", new_obj.version_id)
 
         # Emit update event
         from eventic.events import emit_update

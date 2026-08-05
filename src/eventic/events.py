@@ -1,53 +1,59 @@
 """
 eventic.events  ──  Event-based decorators for Record lifecycle hooks
+
+Handlers are keyed by the **class object** (not the class name), so two
+classes that happen to share a ``__name__`` never cross-fire, and handler
+order within a class is registration order.
+
+Timing: a create handler runs *after* the v0 row is persisted; an update
+handler runs after the append but *before* the transaction commits — treat
+the store as eventually-consistent within the emitting transaction.
 """
 
 from __future__ import annotations
-from typing import Callable, Type, Set, Dict, Any, TYPE_CHECKING
-from functools import wraps
-from collections import defaultdict
 
-if TYPE_CHECKING:
-    from .core.record import Record
+import logging
+from collections import defaultdict
+from typing import Callable, Dict, List, Type
+
+logger = logging.getLogger(__name__)
 
 
 class EventRegistry:
-    """Central registry for event handlers"""
+    """Central registry for event handlers."""
 
     def __init__(self):
-        # Maps event type -> record class -> set of handlers
-        self._handlers: Dict[str, Dict[Type[Record], Set[Callable]]] = {
-            "create": defaultdict(set),
-            "update": defaultdict(set),
+        # event_type -> record class object -> ordered list of handlers
+        self._handlers: Dict[str, Dict[type, List[Callable]]] = {
+            "create": defaultdict(list),
+            "update": defaultdict(list),
         }
-        # Maps class name -> classes to check
-        self._class_map: Dict[str, Set[type]] = defaultdict(set)
 
     def register(
         self,
         event_type: str,
-        record_classes: tuple[Type[Record], ...],
+        record_classes: tuple,
         handler: Callable,
     ) -> None:
-        """Register a handler for specific record classes"""
+        """Register a handler for specific record classes."""
         for cls in record_classes:
-            class_name = cls.__name__
-            self._handlers[event_type][class_name].add(handler)
-            self._class_map[class_name].add(cls)
+            self._handlers[event_type][cls].append(handler)
 
-    def emit(self, event_type: str, instance: Record) -> None:
-        """Emit event to all matching handlers"""
-        instance_class = instance.__class__
-        handlers = set()
-
-        # Also check parent classes
-        for cls in instance_class.__mro__:
-            class_name = cls.__name__
-            if class_name in self._handlers[event_type]:
-                handlers.update(self._handlers[event_type][class_name])
-
-        for handler in handlers:
-            handler(instance)
+    def emit(self, event_type: str, instance) -> None:
+        """Emit event to all matching handlers (base classes too)."""
+        for cls in instance.__class__.__mro__:
+            for handler in self._handlers[event_type].get(cls, []):
+                try:
+                    handler(instance)
+                except Exception:
+                    # Isolation policy: a failing handler must not break the
+                    # mutation/construction that emitted the event.
+                    logger.exception(
+                        "event handler %s failed for %s(%s)",
+                        handler.__name__,
+                        instance.__class__.__name__,
+                        instance.id,
+                    )
 
 
 # Global registry instance
@@ -58,7 +64,7 @@ class OnDecorator:
     """Namespace for event decorators"""
 
     @staticmethod
-    def create(*record_classes: Type[Record]) -> Callable:
+    def create(*record_classes: Type) -> Callable:
         """Decorator for handling record creation events"""
 
         def decorator(func: Callable) -> Callable:
@@ -68,7 +74,7 @@ class OnDecorator:
         return decorator
 
     @staticmethod
-    def update(*record_classes: Type[Record]) -> Callable:
+    def update(*record_classes: Type) -> Callable:
         """Decorator for handling record update events"""
 
         def decorator(func: Callable) -> Callable:
@@ -83,11 +89,11 @@ on = OnDecorator()
 
 
 # Hook into Record lifecycle
-def emit_create(instance: Record) -> None:
-    """Emit create event for new instances"""
+def emit_create(instance) -> None:
+    """Emit create event for new instances."""
     _registry.emit("create", instance)
 
 
-def emit_update(instance: Record) -> None:
-    """Emit update event for modified instances"""
+def emit_update(instance) -> None:
+    """Emit update event for modified instances."""
     _registry.emit("update", instance)
