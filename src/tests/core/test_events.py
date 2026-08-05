@@ -3,7 +3,7 @@
 import pytest
 
 from eventic.connect import _reset, connect
-from eventic.eventbus import _reset_handlers, on_commit
+from eventic.events import _reset_handlers, on_commit
 from eventic.record import Record
 
 

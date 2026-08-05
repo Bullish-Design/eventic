@@ -5,9 +5,9 @@ imports this module (I6 — verified by ``test_core_is_dbos_free``).
 
 ``DurableEvents`` is the delivery-seam plugin whose transactional outbox
 enqueues **ids, never Records** (R-S1). ``durable`` is the explicit DBOS step
-registration that replaces the old ``@evented`` magic; ``queue(name)`` hands
+registration that replaces the old implicit-queue magic; ``queue(name)`` hands
 out explicit, memoized queue handles (DBOS 2.29 rejects a second ``Queue`` of
-the same name); ``create_app`` wires FastAPI + DBOS without an ``Eventic(DBOS)``
+the same name); ``create_app`` wires FastAPI + DBOS without the old singleton
 subclass.
 
 The durable contract (documented in MIGRATION.md/README): handlers registered
@@ -29,7 +29,7 @@ from dbos import DBOS, Queue as _DBOSQueue
 
 from ..connect import connect as _connect
 from ..errors import EventicError
-from ..eventbus import _HANDLERS, _HANDLER_IDS
+from ..events import _HANDLERS, _HANDLER_IDS
 from ..plugins import Plugin, Seam, register_delivery
 from ..plugins.persistence import set_ambient_session_provider
 
@@ -69,7 +69,7 @@ def _reset_queues() -> None:
 
 
 # ---------------------------------------------------------------------- #
-# explicit step registration (replaces @evented)
+# explicit step registration
 # ---------------------------------------------------------------------- #
 def durable(fn):
     """Register ``fn`` as a DBOS step (== ``DBOS.step()``). Explicit, no magic."""
@@ -124,7 +124,7 @@ register_delivery(DurableEvents)
 
 
 # ---------------------------------------------------------------------- #
-# FastAPI + DBOS wiring (no Eventic(DBOS) subclass, no process singleton)
+# FastAPI + DBOS wiring (no singleton subclass, no process singleton)
 # ---------------------------------------------------------------------- #
 def create_app(name: str, *, db_url: str, **fastapi_kwargs: Any):
     """One-liner for web apps: FastAPI + DBOS + the eventic engine on one DB."""

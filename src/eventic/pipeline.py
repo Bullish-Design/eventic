@@ -15,7 +15,7 @@ import logging
 import uuid
 from typing import Any, TYPE_CHECKING
 
-from .eventbus import Event
+from .events import Event
 from .plugins import delivery_backends
 
 if TYPE_CHECKING:

@@ -16,7 +16,7 @@ from .errors import (
     PluginConflictError,
     StaleVersionError,
 )
-from .eventbus import on_commit
+from .events import on_commit
 from .plugins import Plugin, Seam, use
 from .plugins.codec import DiffStorage
 from .record import Record

@@ -286,3 +286,22 @@ test inserts must use `.hex` for the Uuid storage format). Downgrade re-adds
 library with `meta` folded; upgrade/downgrade round-trips on SQLite; the
 fold's downgrade rebuilds properties from meta; a `postgres`-marked PG
 round-trip (skipped here — CI). 3 passed + 1 skipped. **Committed:** Step 10.
+
+## 2026-08-04 — Session 3 (cont.) — Steps 11–12 (Phases 5–6)
+
+**Step 11 — docs & packaging.** README rewritten to the CONCEPT §9
+positioning (invariants, pipeline, events/modes, plugins, loud concurrency);
+MIGRATION.md (0.1.x → 0.2 code renames + the durable contract + the DB
+migration order); pyproject bumped to 0.2.0, core deps verified = pydantic +
+sqlalchemy + python-dotenv + alembic, `[dbos]`/`[pg]` extras confirmed via
+importlib.metadata. Kept the `eventic-example` console script (the new demo is
+DBOS-free). 86 passed + 1 skipped.
+
+**Step 12 — the swap.** Deleted the old modules (`core/record.py`,
+`core/properties.py`, `persistence/*`, `queues/*`, `events.py`, `runtime.py`,
+`bootstrap.py`, `main.py`); renamed `eventbus.py` → `events.py` (D1 resolved);
+updated all references incl. `migrations/env.py` (D22) and `dbos-config.yaml`;
+old test files were already removed at Step 9 (D18). Grep gate clean
+(`RecordMeta|evented|Eventic(|PropertiesBase|_owner` → nothing); old module
+names are unimportable; 86 tests green; demo runs; `import eventic` DBOS-free.
+**Committed:** Steps 11, 12.

@@ -15,7 +15,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-from eventic.persistence.models import Base  # noqa: F401  (registers tables)
+from eventic.models import Base  # noqa: F401  (registers the records table)
 
 config = context.config
 

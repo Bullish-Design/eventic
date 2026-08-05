@@ -638,3 +638,12 @@ Appendix B). Each row: date · step · deviation · reason.
 - **2026-08-04 · Step 10 · D21 — SQLite Uuid storage is hex(32); raw-SQL test
   inserts must use `.hex`.** The ORM `Uuid` type stores uuid.hex on SQLite;
   hyphenated strings never match typed lookups.
+- **2026-08-04 · Step 12 · D22 — `migrations/env.py` now imports
+  `eventic.models` (the new Base).** It previously imported the deleted
+  `eventic.persistence.models`; the target metadata is only used for
+  autogenerate, and the new Base reflects the records table identically minus
+  the folded `properties` column. `dbos-config.yaml`'s start command was
+  retargeted to `uvicorn eventic.examples.webhook:app`.
+- **2026-08-04 · Step 12 · D1 resolved — `events.py` restored.** The new event
+  core moved from the working name `eventbus.py` to `events.py` at the swap,
+  as planned.

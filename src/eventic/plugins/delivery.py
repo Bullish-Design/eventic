@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from ..eventbus import Event, _HANDLERS
+from ..events import Event, _HANDLERS
 from . import Plugin, Seam
 
 logger = logging.getLogger(__name__)

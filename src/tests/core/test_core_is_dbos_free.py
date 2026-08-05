@@ -17,7 +17,7 @@ SRC = pathlib.Path(__file__).resolve().parents[2] / "eventic"
 CORE_FILES = [
     "connect.py",
     "errors.py",
-    "eventbus.py",
+    "events.py",
     "models.py",
     "pipeline.py",
     "record.py",

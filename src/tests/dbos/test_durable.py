@@ -22,7 +22,7 @@ except ImportError:
 
 from eventic.connect import _reset, connect, engine
 from eventic.errors import EventicError
-from eventic.eventbus import _reset_handlers, on_commit
+from eventic.events import _reset_handlers, on_commit
 from eventic.record import Record
 
 pytestmark = pytest.mark.skipif(not HAVE_DBOS, reason="requires eventic[dbos]")
@@ -216,7 +216,7 @@ def test_core_import_is_dbos_free_subprocess():
 
     src = pathlib.Path(__file__).resolve().parents[2] / "eventic"
     for rel in [
-        "connect.py", "errors.py", "eventbus.py", "models.py", "pipeline.py",
+        "connect.py", "errors.py", "events.py", "models.py", "pipeline.py",
         "record.py", "plugins/__init__.py", "plugins/codec.py",
         "plugins/delivery.py", "plugins/identity.py", "plugins/interceptor.py",
         "plugins/persistence.py",
