@@ -98,7 +98,11 @@ class Record(BaseModel, metaclass=RecordMeta):
         data[name] = value
 
         data["version"] = self.version + 1
-        data["version_id"] = str(uuid.uuid4())
+        # Deterministic version_id: identical (id, version) replays collide on
+        # the PK and are safely ignored, instead of inserting duplicate rows (C6).
+        data["version_id"] = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"eventic:{self.id}:{data['version']}")
+        )
 
         new_obj = self.__class__(**data)  # type: ignore[arg-type]
         self._ensure_store()
@@ -117,31 +121,45 @@ class Record(BaseModel, metaclass=RecordMeta):
     @classmethod
     def where(cls: type[T_Record], **filters: Any) -> list[T_Record]:
         """
-        Return records whose JSONB properties match *all* of the given key/value
-        pairs.  Example: Story.where(status="published", audience="kids")
+        Return hydrated records whose JSONB properties match *all* of the given
+        key/value pairs.  Example: Story.where(status="published", audience="kids")
+
+        Filtering is scoped to this class (``class_type == cls.__name__``); if
+        you subclass records, register/query the subclass name.
         """
-        return cls._store.find_by_properties(filters)
+        cls._ensure_store()
+        ids = cls._store.find_by_properties(cls.__name__, filters)
+        return [cls.hydrate(rid) for rid in ids]  # C4: real records, not UUIDs
 
     # hydration
     @classmethod
     def hydrate(
-        cls: Type[T_Record], rec_id: uuid.UUID, version: int | None = None
+        cls: Type[T_Record],
+        rec_id: uuid.UUID,
+        at_version: int | None = None,
     ) -> T_Record:
+        """
+        Return the record as of ``at_version`` (default: latest committed row).
+
+        ``at_version`` selects the newest row with ``version <= at_version``
+        ("latest ≤ at_version" semantics); rows are scoped to this class via
+        ``class_type == cls.__name__`` (H4).
+        """
         cls._ensure_store()
-        if version is None:
-            state = cls._store.latest(rec_id)  # Or latest_sync?
+        if at_version is None:
+            state = cls._store.latest(rec_id, class_type=cls.__name__)
             if not state:
                 raise KeyError(
                     f"{cls.__name__} {rec_id} not found (no committed rows yet)"
                 )
             return cls.model_validate(state)
         obj: T_Record | None = None
-        for row in cls._store.stream(rec_id):  # type: ignore[union-attr]
-            if row.version > version:
+        for row in cls._store.stream(rec_id, class_type=cls.__name__):
+            if row.version > at_version:
                 break
             obj = cls.model_validate(row.data)
         if obj is None:
-            raise KeyError(f"{cls.__name__} {rec_id} ≤ v{version} not found")
+            raise KeyError(f"{cls.__name__} {rec_id} ≤ v{at_version} not found")
         return obj
 
     # internal util

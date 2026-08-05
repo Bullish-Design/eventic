@@ -6,12 +6,18 @@ fail on the pre-refactor code and pass from Step 3 onward.
 
 import uuid
 
+import pytest
+
 from eventic import Eventic, Record, on
 
 
 class Story(Record):
     title: str | None = None
     body: str | None = None
+
+
+class Note(Record):
+    text: str | None = None
 
 
 def test_mutation_outside_transaction_persists(eventic):
@@ -93,3 +99,80 @@ def test_create_event_fires_after_persist(eventic):
     assert len(created) == 1
     assert created[0][0] == s.id
     assert created[0][1] == "evented"
+
+
+def test_replayed_append_is_idempotent(eventic):
+    """C6: re-appending the same (id, version) row is a no-op, not a duplicate."""
+    s = Story(title="t")
+    s.body = "x"  # v1 — deterministic version_id derived from (id, 1)
+
+    fresh = Story.hydrate(s.id)  # v1 record
+    # Simulate a crash-recovery replay: append v1's exact row again.
+    replay = Story.model_validate(fresh.model_dump(mode="json"))
+    replay._store.append(replay)
+
+    # read version attributes while the stream session is open (rows are
+    # detached once the generator closes)
+    versions = [r.version for r in Story._store.stream(s.id)]
+    assert versions == [0, 1]  # still exactly v0 + v1
+
+
+def test_concurrent_mutations_do_not_duplicate_versions(eventic):
+    """C6: two writers deriving v1 from the same v0 must not create duplicate versions.
+
+    Both compute the same deterministic version_id for (id, 1); the second
+    insert is ignored, so the history stays exactly [v0, v1].
+    """
+    s = Story(title="base")  # v0
+    a = Story.hydrate(s.id)  # writer A's view of v0
+    b = Story.hydrate(s.id)  # writer B's view of v0
+
+    a.title = "from A"  # both derive version 1 from the same base...
+    b.title = "from B"  # ...same (id, version=1), same deterministic version_id
+
+    versions = [r.version for r in Story._store.stream(s.id)]
+    assert versions == [0, 1]  # exactly one v1 — no duplicate versions
+    fresh = Story.hydrate(s.id)
+    assert fresh.title in ("from A", "from B")  # one writer won
+
+
+def test_where_filters_by_class_type(eventic):
+    """H4: identical properties on two classes must not cross-fire."""
+
+    @Eventic.transaction()
+    def seed():
+        s = Story(title="s")
+        s.properties.add(status="published")
+        s.properties = s.properties
+        n = Note(text="n")
+        n.properties.add(status="published")
+        n.properties = n.properties
+        return s.id, n.id
+
+    sid, nid = seed()
+    assert [r.id for r in Story.where(status="published")] == [sid]
+    assert [r.id for r in Note.where(status="published")] == [nid]
+
+
+def test_hydrate_wrong_class_raises(eventic):
+    """H4: hydrating a row under the wrong class raises KeyError."""
+    s = Story(title="t")
+    with pytest.raises(KeyError):
+        Note.hydrate(s.id)
+
+
+def test_hydrate_at_version(eventic):
+    """H8: at_version selects the newest row with version <= at_version."""
+    s = Story(title="v0")
+    s.body = "v1"
+    s.title = "v2"
+
+    v0 = Story.hydrate(s.id, at_version=0)
+    v1 = Story.hydrate(s.id, at_version=1)
+    v2 = Story.hydrate(s.id, at_version=2)
+    latest = Story.hydrate(s.id)
+
+    assert v0.title == "v0" and v0.body is None and v0.version == 0
+    assert v1.body == "v1" and v1.title == "v0" and v1.version == 1
+    assert v2.title == "v2" and v2.body == "v1" and v2.version == 2
+    assert latest.version == 2
