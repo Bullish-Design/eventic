@@ -389,4 +389,3 @@ devenv.local.nix
 .pre-commit-config.yaml
 
 # Scratch / working notes (review artifacts versioned in e76d0a1)
-.scratch/
