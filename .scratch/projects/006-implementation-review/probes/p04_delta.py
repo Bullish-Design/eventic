@@ -5,6 +5,10 @@ Claims under test:
   docs/BENCHMARKS.md   — get(id, revision=n) is <= K+1 rows for delta/1
   CONCEPT.md §12 (5,6) — heads byte-exactly rebuildable, no orphan
   §3.4 R6             — a user document whose top-level keys are set/del/base/every
+
+Regression probe: the 006 review refuted these candidates (delta is correct)
+and F8 folded the rebuild-exactness claim into the four-way property test;
+this probe keeps the direct, hand-shaped assertions alive.
 """
 
 from __future__ import annotations
