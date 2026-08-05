@@ -4,24 +4,25 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eventic"
-version = "0.1.5"
-description = "DBOS backed event based pydantic models."
+version = "0.2.0"
+description = "Versioned Pydantic aggregates whose history is an event stream."
 readme = "README.md"
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
 dependencies = [
-    "alembic>=1.13",               # migrations (dbos 2.x no longer pulls it in)
-    "dbos>=2.29.0,<3.0",
-    "fastapi>=0.115.2",          # runtime.py imports it directly; dbos no longer pulls it in
-    "sqlalchemy>=2.0.43",        # store.py/models.py import it directly
-    "psycopg[binary]>=3.1",      # single driver; matches DBOS's internal psycopg3 engine
-    "pydantic>=2.0",             # Record/PropertiesBase are pydantic models
+    "alembic>=1.13",               # migrations
+    "sqlalchemy>=2.0.43",          # the core store
+    "pydantic>=2.0",               # Record is a plain pydantic model
     "python-dotenv>=1.1.1",
-    "uvicorn>=0.30",             # dbos-config start command runs eventic.main:app
 ]
 
 [project.optional-dependencies]
-pg = []                          # pg is now the default path; kept for README compatibility (M1)
+dbos = [                       # optional durable delivery + FastAPI wiring
+    "dbos>=2.29.0,<3.0",
+    "fastapi>=0.115.2",
+    "uvicorn>=0.30",
+]
+pg = ["psycopg[binary]>=3.1"]       # Postgres driver for connect(postgresql://...) (D11)
 test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
