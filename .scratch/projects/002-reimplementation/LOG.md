@@ -202,3 +202,41 @@ interceptor priority ordering. Defaults converted to `Plugin` subclasses
 (before_commit veto, after_commit isolated, after_hydrate on reads).
 Deviations D7, D8. 12 assembly tests; all 49 Phase-1 tests green *through the
 seam dispatch*; old suite still 28 green. **Committed:** Step 6.
+
+## 2026-08-04 — Session 3 (cont.) — Step 7 (Phase 3, risky step)
+
+**Probe first (probe_05, rewritten twice):** verified against the installed
+dbos 2.29.0 source and live SQLite:
+- `queue.enqueue` works from workflow/bare/handler contexts; **asserts
+  `cur_ctx.is_workflow()` inside any @DBOS.transaction()**.
+- Enqueued args cross the queue via the default serializer; str ids keep
+  Records out of the system DB (R-S1).
+- **D13 finding:** `init_workflow` writes the child row in the system DB's own
+  transaction immediately — a failed parent workflow does NOT roll the enqueue
+  back (nor completed txn-step app writes). The guide's "transactional
+  outbox, atomic with the append" is not achievable as written on 2.29; the
+  honest contract is at-least-once + idempotent handlers. probe_05 records it.
+- **D12 finding:** SQLAlchemy `begin_nested()` + outer ROLLBACK does not roll
+  back on SQLite (rows survived; raw sqlite3 rolls back fine) — so the ambient
+  join uses check-then-insert instead of savepoints.
+
+**Built:** `eventic/dbos/__init__.py` — `DurableEvents` (delivery seam,
+`requires={"persistence:transactional"}`, enqueues `(handler_id, record_id)`
+str args; loud `EventicError` if invoked inside a DBOS transaction; no-op when
+no durable handlers match), `durable()` (explicit DBOS.step registration),
+`queue()` (memoized handles — DBOS rejects duplicate Queue names),
+`create_app()` (FastAPI + DBOS + eventic engine, no Eventic(DBOS) subclass);
+ambient-session hook registering `DBOS.sql_session` into the persistence
+plugin (appends join the transaction; a failed txn fn rolls the row back —
+verified). `eventbus.on_commit` extended with `queue=` param, handler ids
+(`module:qualname`), loud mode/queue validation at registration. pyproject:
+dbos/fastapi/uvicorn moved to `[dbos]` extra; `pg` extra carries psycopg (D11).
+`append` returns inserted-bool; pipeline delivers events only for real inserts
+(I7 replay fix).
+
+**8 dbos tests** (gated on the extra, skipif-import): handler runs after
+commit via queue; id-not-record + system-DB bytes check (R-S1); replay fires
+exactly one delivery; at-least-once across workflow abort (D13); transaction-
+wrapped durable save raises loudly with nothing persisted; ambient join rolls
+back a failed txn fn; explicit durable pattern end-to-end. Core (49) + plugins
+(12) + old suite (28) all green. **Committed:** Step 7.

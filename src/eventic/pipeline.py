@@ -44,8 +44,10 @@ def commit_version(
         itc.before_commit(new)
     # 2. encode (exclusive codec seam)
     encoded = cls._codec.encode(prev, new)
-    # 3. persist (exclusive persistence seam) — append-only, loud on conflicts
-    cls._persistence.append(
+    # 3. persist (exclusive persistence seam) — append-only, loud on conflicts.
+    #    A byte-identical replay writes nothing, so no event fires (I7:
+    #    exactly once per *commit* — a replay is not a commit).
+    inserted = cls._persistence.append(
         {
             "version_id": new.version_id,
             "id": new.id,
@@ -61,9 +63,10 @@ def commit_version(
         except Exception:
             logger.exception("after_commit interceptor %s failed", type(itc).__name__)
     # 5. emit -> deliver — strictly post-durable, exactly once (I7)
-    event = Event(kind=kind, record=new, delta=delta)
-    for backend in delivery_backends():
-        backend.deliver(event)
+    if inserted:
+        event = Event(kind=kind, record=new, delta=delta)
+        for backend in delivery_backends():
+            backend.deliver(event)
 
 
 def _hydrate(cls: type["Record"], state: dict) -> "Record":

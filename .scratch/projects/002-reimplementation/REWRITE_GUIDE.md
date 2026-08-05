@@ -557,3 +557,32 @@ Appendix B). Each row: date · step · deviation · reason.
   must subclass `Plugin` — a top-level `from .persistence import ...` would
   create a circular import. The defaults are imported last, after the base
   classes are defined. No behavior change.
+- **2026-08-04 · Step 7 · D13 — DBOS 2.29's `Queue.enqueue` is NOT abort-atomic
+  with the enclosing workflow.** The guide's sketch says to enqueue "inside
+  the same DBOS transaction that wrote the version (transactional outbox)".
+  Verified against the installed source + probes: (a) `enqueue` *requires* a
+  workflow context — it asserts `cur_ctx.is_workflow()` inside any
+  `@DBOS.transaction()`, so it can never literally run "in the transaction
+  that wrote the version"; (b) `start_workflow(execute_workflow=False)` →
+  `_init_workflow` writes the child workflow row in the **system DB's own
+  transaction immediately** (`init_workflow` uses `self.engine.begin()`), so a
+  subsequently-failed parent does NOT roll the enqueue back, and completed
+  transaction-step app writes survive too. The delivered contract is
+  **at-least-once**: the enqueue runs synchronously right after the append
+  succeeds (only when a row was actually inserted, I7), carries `(handler_id,
+  record_id)` — two strings, never a Record (R-S1) — and durable handlers must
+  be idempotent. `DurableEvents.deliver` raises a clear `EventicError` if it
+  is invoked inside a DBOS transaction (workflow context required).
+  probe_05 documents all four findings.
+- **2026-08-04 · Step 7 · D12 — the persistence append is check-then-insert,
+  not insert-then-rollback, and joins the ambient session without savepoints.**
+  The first ambient-session attempt used `Session.begin_nested()` around the
+  insert so a failed insert couldn't poison the outer transaction. SQLAlchemy's
+  savepoint RELEASE + outer ROLLBACK does **not** actually roll back on SQLite
+  (verified with SQL echo + raw sqlite3): rows written inside a released
+  savepoint survived the surrounding rollback — which would break the
+  transactional join. The append now SELECTs `(id, version)` first and decides
+  replay-vs-conflict before any insert; the only IntegrityError left is a lost
+  race, which is loud by definition. `append` returns whether a row was
+  inserted, and the pipeline delivers events only for real inserts (I7:
+  a replay is not a commit).

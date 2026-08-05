@@ -31,6 +31,23 @@ from . import Plugin, Seam
 
 _MISSING = object()
 
+# Optional ambient-transaction hook: an adapter (eventic.dbos) registers a
+# provider so appends can JOIN the surrounding transaction when one is active
+# (the "persistence:transactional" capability). The default provider means
+# "never ambient" — the core stays DBOS-free (I6).
+_ambient_session: "Callable[[], Session | None]" = lambda: None
+
+
+def set_ambient_session_provider(fn) -> None:
+    """Register a callable returning the ambient session or None."""
+    global _ambient_session
+    _ambient_session = fn
+
+
+def _reset_ambient_session_provider() -> None:
+    global _ambient_session
+    _ambient_session = lambda: None
+
 
 def _jsonable(value: Any) -> Any:
     """Normalize filter values to what the JSON column actually stores."""
@@ -68,30 +85,79 @@ class SingleTableJSONB(Plugin):
     # ------------------------------------------------------------------ #
     # write
     # ------------------------------------------------------------------ #
-    def append(self, row: dict) -> None:
+    def append(self, row: dict) -> bool:
         """Insert one immutable version row; loud on real conflicts (I5).
 
-        ``row``: version_id, id, version, class_type, data (created_ts is
-        filled by the column default).
+        Returns ``True`` if a new row was written, ``False`` for a byte-
+        identical replay no-op (I5). ``row``: version_id, id, version,
+        class_type, data (created_ts filled by the column default).
+
+        When an ambient transaction session is active (e.g. a DBOS
+        transaction), the insert JOINS it — the outer transaction owns the
+        commit, so a failed enclosing workflow rolls the row back (the
+        ``persistence:transactional`` capability behind the transactional
+        outbox). [Deviation D12: the first attempt used ``begin_nested()`` so
+        a failed insert couldn't poison the ambient session, but SQLAlchemy's
+        savepoint RELEASE + outer ROLLBACK does not actually roll back on
+        SQLite — rows survived failed transactions. The check-then-insert
+        shape avoids touching the session after any error; the only
+        IntegrityError left is a lost race, which is loud by definition.]
         """
+        ambient = _ambient_session()
+        if ambient is not None:
+            try:
+                inserted = self._append_in(ambient, row)
+            except IntegrityError:
+                # lost a race inside the ambient transaction: the pre-check
+                # saw no row, so whoever won is a different writer -> loud.
+                # (The ambient session is now poisoned; the enclosing
+                # transaction aborts, which is the correct outcome.)
+                raise StaleVersionError(row["id"], row["version"]) from None
+            return inserted
         with Session(engine(), future=True) as s:
             try:
-                s.execute(insert(RecordRow).values(**row))
+                inserted = self._append_in(s, row)
                 s.commit()
-            except IntegrityError:  # (id, version) collision
+            except IntegrityError:
                 s.rollback()
-                existing = s.execute(
-                    select(RecordRow.version_id, RecordRow.data).where(
-                        RecordRow.id == row["id"],
-                        RecordRow.version == row["version"],
-                    )
-                ).one_or_none()
-                if existing is not None and (
-                    existing.version_id == row["version_id"]
-                    and existing.data == row["data"]
-                ):
-                    return  # byte-identical replay -> idempotent no-op (I5)
-                raise StaleVersionError(row["id"], row["version"])  # different writer -> LOUD
+                return self._resolve_conflict(s, row)
+            return inserted
+
+    def _append_in(self, s: Session, row: dict) -> bool:
+        """Check-then-insert: decide replay/conflict BEFORE touching the
+        session, so a collision never poisons it (D12). Returns True if a row
+        was inserted, False for a replay no-op."""
+        existing = s.execute(
+            select(RecordRow.version_id, RecordRow.data).where(
+                RecordRow.id == row["id"],
+                RecordRow.version == row["version"],
+            )
+        ).one_or_none()
+        if existing is not None:
+            self._decide(existing, row)
+            return False
+        s.execute(insert(RecordRow).values(**row))  # a race may raise IntegrityError
+        return True
+
+    def _decide(self, existing, row: dict) -> None:
+        """I5: byte-identical replay is a silent no-op; anything else is loud."""
+        if existing.version_id == row["version_id"] and existing.data == row["data"]:
+            return
+        raise StaleVersionError(row["id"], row["version"])
+
+    def _resolve_conflict(self, s: Session, row: dict) -> bool:
+        """Post-IntegrityError decision on our own session (already rolled
+        back, so it is usable again)."""
+        existing = s.execute(
+            select(RecordRow.version_id, RecordRow.data).where(
+                RecordRow.id == row["id"],
+                RecordRow.version == row["version"],
+            )
+        ).one_or_none()
+        if existing is not None:
+            self._decide(existing, row)
+            return False  # replay no-op
+        raise StaleVersionError(row["id"], row["version"])
 
     # ------------------------------------------------------------------ #
     # reads (row primitives; the codec decides what it needs)

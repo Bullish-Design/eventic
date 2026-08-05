@@ -26,7 +26,7 @@ class SyncDelivery(Plugin):
 
     def deliver(self, event: Event) -> None:
         for c in type(event.record).__mro__:
-            for kind, fn, mode in _HANDLERS.get(c, []):
+            for kind, fn, mode, queue, h_id in _HANDLERS.get(c, []):
                 if mode != "sync" or kind not in ("*", event.kind):
                     continue
                 try:
