@@ -488,3 +488,19 @@ post-Step-8 states as shippable fallbacks.
   (second codec).
 - Step 12 is the only irreversible cut; keep the pre-Step-12 branch until the new
   suite has soaked and the data migration is validated on a production-shaped copy.
+
+---
+
+## Appendix — Execution notes & deviations
+
+Dated entries recording where the plan met reality (mirrors the 001 guide's
+Appendix B). Each row: date · step · deviation · reason.
+
+- **2026-08-04 · Step 0 (carried through Phases 1–5) · D1 — the new events core
+  lives at `src/eventic/eventbus.py`, not `events.py`, until Step 12.** The old
+  0.1 `events.py` (`EventRegistry`, `on.create/on.update`, `emit_create`) is
+  imported by the old suite (`test_record.py` uses `@on.create`), and the guide
+  requires the old suite to stay green until the Phase-6 swap. Both
+  implementations cannot share one module path, so the new module carries the
+  working name `eventbus.py`; it is `git mv`'d to `events.py` in Step 12 when
+  the old tests are deleted. The final module map is unchanged.

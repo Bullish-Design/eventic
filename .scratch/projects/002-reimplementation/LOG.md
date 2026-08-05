@@ -104,3 +104,34 @@ validation (Phase 6). One commit per step, exit gates, rollback, and a finding�
 closing every R-* finding. Honors the PLUGINS §8.5 guardrail: framework extracted only
 once the second real plugin needs it; each phase ends shippable so scope can be trimmed.
 Suggested build branch: `rewrite/plugin-core` off this one.
+
+## 2026-08-04 — Session 3 (branch `rewrite/plugin-core`) — Step 0
+
+**Read (in the §1 order):** CONCEPT.md, PLUGINS.md, REWRITE_GUIDE.md,
+TARGET_ARCHITECTURE.md, REIMAGINE_REVIEW.md (skim), the four probes, the current
+source (`core/record.py`, `core/properties.py`, `persistence/{models,store}.py`,
+`queues/dispatcher.py`, `events.py`, `runtime.py`, `bootstrap.py`, `main.py`,
+`examples/demo.py`), `pyproject.toml`, both migrations.
+
+**Baseline reproduced:** `.venv/bin/python -m pytest src/tests -q` → **28 passed
+in 34.8s** (matches LOG session 1). Re-ran all four probes — probe_01 (durable v0,
+uuid4 v0 version_id, 4-INSERT amplification, no-op re-validation), probe_02 (B's
+write silently lost, object claims success), probe_03 (≈1.1s DBOS lifecycle vs
+≈14ms value; 11 DBOS tables), probe_04 (py_pickle default; crafted arg executes) —
+all confirm the documented bugs against the current code.
+
+**Branch:** `git checkout -b rewrite/plugin-core` off `reimagine/first-principles`.
+
+**Built (Step 0):**
+- `src/eventic/errors.py` — full error hierarchy (EventicError, NotConnected,
+  StaleVersionError with (id, version) attrs, PluginConflictError, MissingCapability).
+- Empty-with-docstring skeleton for the target module map: `connect.py`,
+  `models.py`, `record.py`, `pipeline.py`, `plugins/{__init__,persistence,codec,
+  identity,delivery,interceptor}.py`, `dbos/__init__.py`, plus
+  `src/tests/{core,plugins,dbos}/__init__.py`.
+- **Deviation D1** (appendix): the new event core is `eventbus.py` for now —
+  `events.py` is occupied by the old 0.1 module the old suite still imports
+  (`@on.create`); renamed to `events.py` at the Step 12 swap.
+
+**Verified:** skeleton imports cleanly; old suite still **28 green**.
+**Committed:** `Step 0: skeleton + errors`.
