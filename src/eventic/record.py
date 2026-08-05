@@ -15,8 +15,9 @@ with the assembled plugin set).
 from __future__ import annotations
 
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Iterator, Self
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +25,33 @@ from . import pipeline
 from .plugins.codec import FullSnapshot
 from .plugins.identity import Uuid5Deterministic, _uuid5
 from .plugins.persistence import SingleTableJSONB
+
+
+class _EditProxy:
+    """In-memory scratch namespace for ``edit()`` — attribute sets land on a
+    draft copy, never on the object and never on the database (I2/I3).
+    Nested mutation (``e.meta["k"] = v``) works because the draft is a real
+    dict copy."""
+
+    def __init__(self, draft: dict):
+        object.__setattr__(self, "_draft", draft)
+
+    def __getattr__(self, name: str):
+        try:
+            return object.__getattribute__(self, "_draft")[name]
+        except (KeyError, AttributeError) as exc:
+            raise AttributeError(name) from exc
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+        else:
+            object.__getattribute__(self, "_draft")[name] = value
+
+
+def _field_changes(before: dict, after: dict) -> dict:
+    """Top-level fields whose value actually changed (deep ``==``)."""
+    return {k: v for k, v in after.items() if before.get(k) != v}
 
 
 class Record(BaseModel):
@@ -59,15 +87,28 @@ class Record(BaseModel):
 
     def update(self, **changes: Any) -> Self:
         """Validate a **new** version with ``changes`` applied and persist it.
-        Returns the new object; the original is untouched (R-C3)."""
+        Returns the new object; the original is untouched (R-C3). Managed
+        fields (id/version/version_id) are always derived, never client-set."""
         data = self.model_dump(mode="python")
         data.update(changes)
+        data["id"] = self.id
         data["version"] = self.version + 1
         data["version_id"] = _uuid5(self.id, data["version"])
         data.pop("created_ts", None)  # the row's DB default stamps it
         new = type(self)(**data)
         pipeline.commit_version(type(self), new=new, prev=self, kind="update")
         return new
+
+    @contextmanager
+    def edit(self) -> Iterator[_EditProxy]:
+        """Batch several field/nested edits into **one** new version (R-P1).
+        Collects changes in memory only; on clean exit a single ``update`` is
+        written. An empty/identical edit writes nothing (no-op guard)."""
+        box = _EditProxy(self.model_dump(mode="python"))
+        yield box
+        changes = _field_changes(self.model_dump(mode="python"), box._draft)
+        if changes:
+            self.update(**changes)
 
     def commit(self) -> Self:
         """Low-level: persist the current in-memory state as the next version."""
