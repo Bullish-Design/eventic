@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from eventic.jsonx import JsonValue
+from eventic.jsonx import JsonObject
 
 Kind = Literal["create", "change"]
 EncodingId = Literal["snapshot/1", "delta/1"]
@@ -68,9 +68,9 @@ class StoredRevision:
     schema_version: int
     meta_version: int
     encoding: str
-    payload: JsonValue
+    payload: JsonObject
     digest: str
-    meta: JsonValue
+    meta: JsonObject
     committed_at: datetime
 
 
