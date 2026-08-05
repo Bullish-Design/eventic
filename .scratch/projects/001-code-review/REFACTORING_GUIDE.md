@@ -864,3 +864,40 @@ ALTER TABLE records ADD CONSTRAINT uq_records_id_version UNIQUE (id, version);
 - Default serializer is now `pickle`-based (jsonpickle removed) → `Record` instances are serializable as workflow args, but the "snapshot semantics" note in Step 3.2 stands.
 - `DBOS.launch()` lost the `debug_mode` parameter (Eventic never used it); `DBOS.destroy(workflow_completion_timeout_sec=…)` gained a parameter.
 - DBOS 2.29 rewrites `postgresql://` → `postgresql+psycopg://` internally; SQLite system DB is the default when no URL is provided.
+
+---
+
+## Appendix B — Execution notes & deviations (2026-08-04, branch `refactor/dbos-2x-and-core-fixes`)
+
+The guide was followed step-by-step (one commit per step, `Step 1`…`Step 8`). The
+following deviations from the literal guide text were required; each is also
+recorded in the corresponding commit message:
+
+| Step | Deviation | Why |
+|---|---|---|
+| 2 (C2) | `test_public_method_does_not_raise` fails at **collection** with `Queue queue_queued_story has already been declared` (not `DBOSWorkflowFunctionNotFoundError`) | DBOS 2.29 makes queue re-declaration a hard `Exception`; the old per-method `evented` Queue creation trips it at class definition, before any method call |
+| 2 (C4) | `test_where_returns_records` fails with an **empty result** (not the predicted "UUID list") | Pre-fix `find_by_properties` uses Postgres-only `DISTINCT ON` (silently ignored on SQLite) and generic-JSON `contains`, which compiles to a `LIKE` substring match — **not** JSON containment. The guide's claim that `contains` works on SQLite is wrong when `properties` has >1 key (`record_type` is always present) |
+| 2 | Test classes named uniquely per module (`QueuedStory`) | DBOS 2.29's global queue registry raises on any re-declaration; two modules defining `Story` would collide |
+| 3 | Step 3 exit gate: `test_where_returns_records` stays red until Step 4.2 | The guide's gate claims all four Step-2.3 tests pass after Step 3, but C4's fix is Step 4.2 — internally inconsistent; C4 passes at Step 4 |
+| 4.2 | `find_by_properties` uses a window-function latest-per-id subquery + dialect-aware containment (native `jsonb @>` on Postgres, Python `_dict_contains` on SQLite) | The guide's `contains()`-based design cannot do JSON containment on SQLite (see above) |
+| 5.1 | `PropertiesBase._persist` commits directly via `Record._commit` instead of `owner.__setattr__("properties", self)` | The guide's own L4 no-op guard would see the in-place mutation as "no change" and skip the write, breaking H1 entirely. `_commit` also reflects field values via attribute access (model_dump would corrupt nested types) |
+| 5.1 | `model_post_init` binds `_owner` in all branches | Copy-on-write reconstructions carry a populated `properties`, so the guide's `elif` branches never bound them — subsequent `add()` calls would silently lose writes |
+| 6.2 | `migrate` lives under `database:` not `runtimeConfig:` | The 2.29 schema rejects `runtimeConfig.migrate` (runtimeConfig has only `start`/`setup`); the guide's own verification note listed `database(app_db_name, migrate)` correctly |
+| 6.3 | Initial migration fixed (added `Text` import / dropped `astext_type`) | Alembic autogenerate emitted `postgresql.JSONB(astext_type=Text())` without importing `Text` — `alembic upgrade` crashed |
+| 6 | `eventic-example` script + `import eventic.examples.demo` need Postgres (or `DBOS_DATABASE_URL=sqlite:///...`) | The demo and webhook module call `Eventic.create_app` at import; both now honor `DBOS_DATABASE_URL` so they are importable anywhere |
+| 7 | `main.py`'s `Story` renamed `WebhookStory`; test classes kept module-unique | Two same-named `Record` classes cannot coexist in one process (queue registry keyed by derived queue name) — a real library limitation, now documented in the README |
+| 8.2 | Backfill migration uses portable `DELETE … WHERE version_id NOT IN (SELECT MAX(version_id) …)` | The guide's `DELETE … USING` is Postgres-only; SQLite needs the NOT IN form. Constraint add is Postgres-guarded (SQLite cannot `ALTER TABLE ADD CONSTRAINT`) |
+| 8.3 | `Eventic.reset()` now disposes the engine | Without it, pooled sqlite connections leak and `pytest -W error` fails on `ResourceWarning: unclosed database` |
+
+**Verified additional findings during execution:**
+
+- DBOS 2.29 raises `Exception("Queue … has already been declared")` on ANY
+  second `Queue(name)` construction in-process — stricter than the 1.5-era
+  "warning" the guide's M7 test anticipated.
+- The generic SQLAlchemy `JSON.contains()` is a plain `LIKE '%…%'` substring
+  match on non-Postgres backends (falls through to `Concatenable.Comparator`),
+  which is *not* JSON containment semantics.
+- `DBOS.launch()`/`destroy()`/`sql_session` behave exactly as the guide's
+  "Notes on claims" predicted; `destroy_registry=False` (the default) is what
+  keeps queue/step registrations alive across the test fixture's
+  init→destroy→reset cycle.

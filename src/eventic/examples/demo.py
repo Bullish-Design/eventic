@@ -23,20 +23,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-POSTGRES_DB = os.environ["POSTGRES_DB"]
-POSTGRES_USER = os.environ["POSTGRES_USER"]
-POSTGRES_PASSWORD = os.environ["POSTGRES_PASSWORD"]
+if os.environ.get("DBOS_DATABASE_URL"):
+    db_url = os.environ["DBOS_DATABASE_URL"]
+else:
+    db_url = (
+        "postgresql://"
+        + os.environ.get("POSTGRES_USER", "")
+        + ":"
+        + os.environ.get("POSTGRES_PASSWORD", "")
+        + "@localhost/"
+        + os.environ.get("POSTGRES_DB", "eventic")
+    )
 
-db_url = (
-    "postgresql://"
-    + POSTGRES_USER
-    + ":"
-    + POSTGRES_PASSWORD
-    + "@localhost/"
-    + POSTGRES_DB
-)
-
-print(f"\nConnecting to Postgres at {db_url}\n")
+print(f"\nConnecting to {db_url}\n")
 
 
 app = Eventic.create_app("eventic-demo", db_url=db_url)

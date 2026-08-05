@@ -79,6 +79,8 @@ class Eventic(DBOS):  # ① inherit all decorators & queue API
         """Tear down the singleton so the next init() starts fresh (tests, multi-app)."""
         if cls._singleton is not None:
             DBOS.destroy()
+        if cls._engine is not None:
+            cls._engine.dispose()  # release pooled connections (sqlite handles)
         cls._singleton = None
         cls._engine = None
         Record._store = None  # subclasses inherit None via class lookup

@@ -34,5 +34,10 @@ eventic-example = "eventic.examples.demo:main"   # fixed in Step 6 (M2)
 [tool.hatch.build.targets.wheel]
 packages = ["src/eventic"]
 
+[tool.pytest.ini_options]
+markers = [
+    "postgres: integration tests requiring a live Postgres service (CI only)",
+]
+
 #[tool.hatch.build.targets.sdist]
 #include = ["src/examples/**"]
