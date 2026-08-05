@@ -1,0 +1,13 @@
+# Answers inferred for eventic against template-py (the repoman Python template).
+# Used by: copyroom adopt ../template-py --ref v0.1.8 --answers <this file>
+#
+# Values are read off the existing repo: pyproject.toml [project] and the
+# machine repoman.lock's dev root. Report-only — adopting does not rewrite
+# any of these files.
+project_name: eventic
+package_name: eventic
+description: A versioned document store with transactional change notification.
+author_name: Bullish Design
+author_email: BullishDesignEngineering@gmail.com
+project_version: 1.0.0
+repoman_dev_root: /home/andrew/Documents/Projects
