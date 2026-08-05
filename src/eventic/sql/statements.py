@@ -73,6 +73,18 @@ def select_history(stream: str, aggregate_id: UUID, *, since: int, limit: int) -
     )
 
 
+def select_latest_revision(stream: str, aggregate_id: UUID) -> Any:
+    return (
+        select(revisions)
+        .where(
+            revisions.c.stream == stream,
+            revisions.c.aggregate_id == aggregate_id,
+        )
+        .order_by(revisions.c.revision.desc())
+        .limit(1)
+    )
+
+
 def insert_revision(dialect: Dialect, values: dict[str, Any]) -> Any:
     return revisions.insert().values(**values)
 

@@ -13,6 +13,10 @@ import eventic
 def _all_modules() -> list[object]:
     modules = [eventic]
     for info in pkgutil.walk_packages(eventic.__path__, eventic.__name__ + "."):
+        if info.name == "eventic.sql.migrations" or info.name.startswith(
+            "eventic.sql.migrations."
+        ):
+            continue  # alembic scripts are not runtime modules (R9-free by design)
         importlib.import_module(info.name)
         modules.append(sys.modules[info.name])
     return modules

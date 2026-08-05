@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Protocol
 
+from eventic.app import App
 from eventic.envelopes import Page
 from eventic.ids import AggregateKey
 from eventic.jsonx import JsonValue
@@ -99,7 +100,7 @@ class StoreAdmin(Protocol):
 
     def migrate(self) -> None: ...
 
-    def check(self, app: object) -> SchemaReport: ...
+    def check(self, app: App) -> SchemaReport: ...
 
     def rebuild_heads(self, stream: str | None, *, chunk: int) -> RebuildReport: ...
 

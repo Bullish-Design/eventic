@@ -281,4 +281,8 @@ class Runtime:
         return Batch(self)
 
     def admin(self) -> StoreAdmin:
-        raise UsageError("admin operations arrive with the SQL admin module")
+        """A ``StoreAdmin`` for the bound store, or a clear error."""
+        provider = getattr(self.store, "admin", None)
+        if provider is None:
+            raise UsageError("this store does not provide admin operations")
+        return provider()

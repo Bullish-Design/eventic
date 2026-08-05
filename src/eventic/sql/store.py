@@ -28,9 +28,9 @@ from eventic.errors import (
 )
 from eventic.ids import AggregateKey, revision_id
 from eventic.jsonx import JsonObject, JsonValue, canonical_bytes
-from eventic.protocols import Capabilities, Store
+from eventic.protocols import Capabilities, Store, StoreAdmin
 from eventic.sql import statements as st
-from eventic.sql.dialect import SQLITE_CAPABILITIES, Dialect
+from eventic.sql.dialect import POSTGRES_CAPABILITIES, SQLITE_CAPABILITIES, Dialect
 from eventic.wire import (
     ClaimedIntent,
     CommitRequest,
@@ -87,10 +87,10 @@ class SQLite(Store):
             )
         else:
             self.engine = create_engine(url_or_path)
-        self._install_sqlite_events()
+        self._install_events()
         self._create_tables()
 
-    def _install_sqlite_events(self) -> None:
+    def _install_events(self) -> None:
         @sa_event.listens_for(self.engine, "connect")
         def _set_isolation(dbapi_conn: Any, _record: Any) -> None:  # type: ignore[reportUnusedFunction]
             dbapi_conn.isolation_level = None  # manual BEGIN control
@@ -111,6 +111,12 @@ class SQLite(Store):
     def close(self) -> None:
         """Release pooled connections. Idempotent; safe after use."""
         self.engine.dispose()
+
+    def admin(self) -> StoreAdmin:
+        """A :class:`StoreAdmin` for this backend (CLI operations)."""
+        from eventic.sql.admin import SqlAdmin
+
+        return SqlAdmin(self)
 
     # -- write path ---------------------------------------------------------
 
@@ -601,3 +607,28 @@ def _intent_id(intent: IntentRequest) -> UUID:
     from eventic.ids import NS as _NS
 
     return uuid5(_NS, f"intent:{intent.subscription_id}:{intent.revision_id}")
+
+
+class Postgres(SQLite):
+    """The production backend.
+
+    ``encodings`` maps stream names to an :class:`~eventic.encodings.Encoding`
+    (default ``snapshot/1``). Schema is created with ``create_all`` for tests
+    and with ``eventic schema upgrade`` (Alembic) in production; ``alembic
+    check`` guarantees the two cannot drift.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        encodings: Mapping[str, Encoding] | None = None,
+    ) -> None:
+        self.dialect = Dialect(name="postgresql", capabilities=POSTGRES_CAPABILITIES)
+        self._encodings = dict(encodings or {})
+        self.engine = create_engine(url)
+        self._install_events()
+        self._create_tables()
+
+    def _install_events(self) -> None:
+        pass  # Postgres uses its default isolation and row locking
