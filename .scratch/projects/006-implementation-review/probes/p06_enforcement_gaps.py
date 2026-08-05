@@ -1,96 +1,80 @@
-"""Are the I4/R9 and I9 enforcement tests actually comprehensive?
+"""Regression probe: the enforcement test sees private module-level mutables.
 
-§3.3 I4 asks: "do they catch a new module-level dict? a new `import sqlalchemy`
-at module level in a leaf?"  §3.7 asks whether the "exactly once" grep misses
-the CLI help strings or the examples.
+F4 (006 review): `test_no_global_state.py` skipped every attribute whose name
+started with `_`, so injecting `planning._CURRENT_STORE = {}` — the literal
+shape of 003/F8's `_ENGINE` and 004/F16's `_CURRENT` — left the suite green.
 
-This probe injects the violations those tests are supposed to catch and re-runs
-the tests' own logic against the mutated package.
+Fixed (007 Phase 4): the scan now exempts only dunder names (interpreter
+machinery) and `model_config` (pydantic's declarative slot). Any other
+module-level dict/list/set — public or private — is an offender, and
+class-level mutable defaults on module-defined classes are scanned too.
+`eventic.encodings._ENCODING_INSTANCES`, a module-level backing dict for the
+encoding registry, was removed: the registry is now a `MappingProxyType` over
+an inline literal, the only module-level binding being the proxy itself.
+
+Run: devenv shell -- uv run python .scratch/.../probes/p06_enforcement_gaps.py
 """
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
 import sys
 from pathlib import Path
 
-import eventic
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-ROOT = Path(eventic.__file__).resolve().parent.parent.parent
+import eventic  # noqa: E402
 
+from tests.architecture.test_no_global_state import _module_mutables  # noqa: E402
 
-# --- the test's own logic, lifted verbatim ---------------------------------
-def all_modules() -> list[object]:
-    modules = [eventic]
-    for info in pkgutil.walk_packages(eventic.__path__, eventic.__name__ + "."):
-        if info.name == "eventic.sql.migrations" or info.name.startswith(
-            "eventic.sql.migrations."
-        ):
-            continue
-        importlib.import_module(info.name)
-        modules.append(sys.modules[info.name])
-    return modules
-
-
-def offenders() -> list[str]:
-    found: list[str] = []
-    for module in all_modules():
-        for name, value in vars(module).items():
-            if name.startswith("_"):
-                continue
-            if isinstance(value, (dict, list, set)):
-                found.append(f"{module.__name__}.{name}")
-    return found
-
-
-print("=== I4 / R9: test_no_module_level_mutable_binding ===")
-print(f"  clean tree offenders: {offenders()}")
+print("=== I4 / R9: private module-level mutables are now offenders ===")
+clean = _module_mutables()
+print(f"  clean tree offenders: {clean}")
+assert clean == [], clean
 
 import eventic.planning as planning  # noqa: E402
 
-# The exact bug the redesign exists to delete: an ambient process-global cache.
-# Written the way a Python developer would actually write it.
+# The exact bug the redesign exists to delete: an ambient process-global
+# cache, written the way a Python developer would actually write it.
 planning._CURRENT_STORE = {}  # type: ignore[attr-defined]
 planning._SEEN_AGGREGATES = set()  # type: ignore[attr-defined]
-print(f"  after injecting planning._CURRENT_STORE = {{}} and _SEEN_AGGREGATES = set():")
-print(f"    offenders: {offenders()}")
-print("  -> the scan skips every name starting with '_', so a private module-level")
-print("     dict/set/list — the conventional spelling for a cache — is invisible.")
-assert offenders() == [], "expected the gap: private globals are not scanned"
-del planning._CURRENT_STORE  # type: ignore[attr-defined]
-del planning._SEEN_AGGREGATES  # type: ignore[attr-defined]
+try:
+    offenders = _module_mutables()
+    print(f"  after injecting planning._CURRENT_STORE = {{}} and _SEEN_AGGREGATES = set():")
+    print(f"    offenders: {offenders}")
+    assert "eventic.planning._CURRENT_STORE" in offenders, offenders
+    assert "eventic.planning._SEEN_AGGREGATES" in offenders, offenders
+finally:
+    del planning._CURRENT_STORE  # type: ignore[attr-defined]
+    del planning._SEEN_AGGREGATES  # type: ignore[attr-defined]
 
-# And a public one IS caught, confirming the scan works for the shape it checks:
+# And a public one is still caught, confirming the scan kept its teeth:
 planning.CACHE = {}  # type: ignore[attr-defined]
-print(f"  after injecting a PUBLIC planning.CACHE = {{}}: {offenders()}")
-assert offenders() == ["eventic.planning.CACHE"]
-del planning.CACHE  # type: ignore[attr-defined]
+try:
+    offenders = _module_mutables()
+    print(f"  after injecting a PUBLIC planning.CACHE = {{}}: {offenders}")
+    assert "eventic.planning.CACHE" in offenders, offenders
+finally:
+    del planning.CACHE  # type: ignore[attr-defined]
+
+# The encoding registry no longer hides a mutable backing dict behind a proxy:
+from eventic.encodings import ENCODINGS  # noqa: E402
+from types import MappingProxyType  # noqa: E402
+
+assert isinstance(ENCODINGS, MappingProxyType)
+print("\nOK: the scan reports injected private mutables;")
+print("    ENCODINGS is a MappingProxyType with no mutable backing name.")
 
 print("\n=== I9 / item 15: the 'exactly once' grep scope ===")
+from pathlib import Path  # noqa: E402
 
+from tests.architecture.test_delivery_contract import _source_files
 
-def scanned_files() -> list[Path]:
-    return sorted(ROOT.joinpath("src").rglob("*.py")) + sorted(
-        ROOT.joinpath("docs").rglob("*.md")
-    )
-
-
-scanned = {p.resolve() for p in scanned_files()}
+scanned = {p.resolve() for p in _source_files()}
 print(f"  files scanned: {len(scanned)}")
-
-docs_like = [
-    ROOT / "README.md",
-    ROOT / "AGENTS.md",
-]
-for path in docs_like:
+for name in ("README.md", "AGENTS.md"):
+    path = Path(__file__).resolve().parent.parent.parent.parent / name
     if path.exists():
-        print(f"  {path.name:12} scanned? {path.resolve() in scanned}")
-
-readme = (ROOT / "README.md").read_text().lower()
-print(f"  README.md actually contains 'exactly once'? {'exactly once' in readme}")
-print("  -> the claim holds today, but README.md — the primary documentation —")
-print("     is outside the grep's scope, so a regression there is unguarded.")
+        print(f"  {name:12} scanned? {path.resolve() in scanned}")
 
 print("\n=== R10: worker.run_forever shutdown ===")
 import inspect  # noqa: E402
@@ -99,7 +83,5 @@ from eventic.worker import Worker  # noqa: E402
 
 src = inspect.getsource(Worker.run_forever)
 print("  " + "\n  ".join(src.strip().splitlines()))
-has_signal = "signal" in src or "SIGTERM" in src or "stop" in src.lower()
-print(f"  any signal/stop handling? {has_signal}")
-print("  -> an unbounded `while True` with a blocking sleep and no stop flag;")
-print("     the only exit is an exception. A deployed worker cannot drain-and-stop.")
+has_stop = "stop" in src or "Event" in src
+print(f"  stop flag / Event? {has_stop}")

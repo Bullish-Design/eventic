@@ -17,6 +17,10 @@ import eventic
 ROOT = Path(eventic.__file__).resolve().parent.parent.parent
 
 
+def _is_dunder(name: str) -> bool:
+    return name.startswith("__") and name.endswith("__")
+
+
 def _module(name: str) -> types.ModuleType:
     return importlib.import_module(name)
 
@@ -82,7 +86,7 @@ def test_no_contextvar_or_threadlocal() -> None:
             continue
         module = importlib.import_module(info.name)
         for name, value in vars(module).items():
-            if name.startswith("_"):
+            if _is_dunder(name):
                 continue
             if (
                 "ContextVar" in type(value).__name__

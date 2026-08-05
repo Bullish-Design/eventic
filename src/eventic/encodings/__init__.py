@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Protocol
 
@@ -39,10 +40,13 @@ def get_encoding(encoding_id: str) -> Encoding:
 from eventic.encodings.delta import Delta  # noqa: E402
 from eventic.encodings.snapshot import Snapshot  # noqa: E402
 
-_ENCODING_INSTANCES: dict[str, Encoding] = {
-    "snapshot/1": Snapshot(),  # type: ignore[assignment]
-    "delta/1": Delta(),  # type: ignore[assignment]
-}
-
-# Immutable registry (R9): a mapping proxy is not a module-level dict.
-ENCODINGS = MappingProxyType(_ENCODING_INSTANCES)
+# Immutable registry (R9): the only module-level binding is a mapping proxy.
+# A private backing dict (a previous ``_ENCODING_INSTANCES``) would be a
+# module-level mutable — the exact shape the enforcement test must catch —
+# so the mapping is built inline and never bound by a mutable name.
+ENCODINGS: Mapping[str, Encoding] = MappingProxyType(
+    {
+        "snapshot/1": Snapshot(),  # type: ignore[assignment]
+        "delta/1": Delta(),  # type: ignore[assignment]
+    }
+)
