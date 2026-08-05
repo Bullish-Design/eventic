@@ -7,6 +7,8 @@ schema-parity gate (create_all vs alembic upgrade head) is here too.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 from sqlalchemy import create_engine, inspect
@@ -36,17 +38,32 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _pg_factory() -> object:
-    assert PG_URL
-    dropped = False
+def _drop_everything(engine: Any) -> None:
+    """Drop the eventic tables and alembic's own version table.
+
+    ``metadata.drop_all`` leaves ``alembic_version`` behind, so an alembic
+    run from an earlier test would otherwise persist its stamp into the next
+    scenario's "fresh" database.
+    """
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        metadata.drop_all(conn)
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+
+
+def _pg_factory() -> Callable[[], Postgres]:
+    """A store factory giving every scenario a clean database.
+
+    Scenarios share fixed aggregate UUIDs, so each one must run against a
+    fresh schema — exactly what the SQLite conformance test gets with a new
+    file per scenario.
+    """
 
     def factory() -> Postgres:
-        nonlocal dropped
         store = Postgres(PG_URL)
-        if not dropped:
-            metadata.drop_all(store.engine)
-            metadata.create_all(store.engine)
-            dropped = True
+        _drop_everything(store.engine)
+        metadata.create_all(store.engine)
         return store
 
     return factory
@@ -80,8 +97,8 @@ def test_concurrent_drainers_scenario_active() -> None:
 def test_schema_parity_create_all_vs_alembic() -> None:
     assert PG_URL
     engine = create_engine(PG_URL)
+    _drop_everything(engine)
     with engine.begin():
-        metadata.drop_all(engine)
         metadata.create_all(engine)
     created_tables = set(inspect(engine).get_table_names())
 
@@ -93,13 +110,16 @@ def test_schema_parity_create_all_vs_alembic() -> None:
     pkg = resources.files("eventic.sql.migrations")
     cfg = Config(str(pkg / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", PG_URL)
-    with engine.begin():
-        metadata.drop_all(engine)
+    _drop_everything(engine)
     command.upgrade(cfg, "head")
     migrated_tables = set(inspect(engine).get_table_names())
     engine.dispose()
 
-    assert created_tables == migrated_tables
+    # create_all cannot create alembic_version (it is alembic bookkeeping, not
+    # part of the eventic metadata), so compare only the eventic tables.
+    assert created_tables - {"alembic_version"} == migrated_tables - {
+        "alembic_version"
+    }
 
 
 def test_alembic_check_clean_on_create_all_database() -> None:
