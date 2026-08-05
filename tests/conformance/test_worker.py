@@ -206,14 +206,16 @@ def test_inline_and_durable_envelopes_identical() -> None:
     )
     runtime = app.bind(store)
     first = runtime[todos].create(Todo(text="a"))
-    runtime[todos].change(first, done=True)
+    changed = runtime[todos].change(first, done=True)
+    runtime[todos].replace(changed, Todo(text="c", done=False))
 
-    assert len(inline_seen) == 2
+    assert len(inline_seen) == 3
     worker = Worker(app, store, queue="q")
     worker.drain_once()
     worker.drain_once()
+    worker.drain_once()
 
-    assert len(durable_seen) == 2
+    assert len(durable_seen) == 3
     for inline, durable in zip(inline_seen, durable_seen, strict=True):
         assert inline.kind == durable.kind
         assert inline.revision.revision == durable.revision.revision
@@ -221,6 +223,77 @@ def test_inline_and_durable_envelopes_identical() -> None:
         assert inline.changed == durable.changed
         assert inline.revision.digest == durable.revision.digest
         assert inline.revision.state.model_dump() == durable.revision.state.model_dump()
+    store.close()
+
+
+def test_replace_reports_changed_for_replaced_keys() -> None:
+    """F3: replace diffs against the *previous* state, not the new one.
+
+    ARCHITECTURE.md §2.2: an inline handler and a worker rebuilding the same
+    commit from the log receive field-for-field identical envelopes. When
+    ``replace`` passed the new state as the ``before`` document, the inline
+    envelope always reported ``changed=frozenset()`` while the durable one
+    reported the true diff.
+    """
+    store = SQLite(":memory:")
+    todos = Stream(Todo, name="todos")
+    inline_seen: list[Commit[Todo, BaseModel]] = []
+    durable_seen: list[Commit[Todo, BaseModel]] = []
+
+    def handler(commit: Commit[Todo, BaseModel]) -> None:
+        inline_seen.append(commit)
+
+    def outbox_handler(commit: Commit[Todo, BaseModel]) -> None:
+        durable_seen.append(commit)
+
+    app = App(
+        id="demo",
+        streams=[todos],
+        subscriptions=[
+            Subscription(id="inline", stream=todos, handler=handler),
+            Subscription(
+                id="outbox",
+                stream=todos,
+                handler=outbox_handler,
+                delivery=Outbox(queue="q"),
+            ),
+        ],
+    )
+    runtime = app.bind(store)
+    first = runtime[todos].create(Todo(text="a", done=False))
+    replaced = runtime[todos].replace(first, Todo(text="b", done=True))
+
+    assert inline_seen[1].changed == frozenset({"text", "done"})
+    # the durable reconstruction agrees
+    worker = Worker(app, store, queue="q")
+    assert worker.drain_once().delivered == 2
+    assert durable_seen[1].changed == frozenset({"text", "done"})
+    assert inline_seen[1].changed == durable_seen[1].changed
+    assert inline_seen[1].revision.digest == durable_seen[1].revision.digest
+    assert replaced.digest == durable_seen[1].revision.digest
+    store.close()
+
+
+def test_batch_replace_reports_changed_for_replaced_keys() -> None:
+    """F3 applies to the batch path too: ``BatchCollection.replace`` must diff
+    against the previous state."""
+    store = SQLite(":memory:")
+    todos = Stream(Todo, name="todos")
+    inline_seen: list[Commit[Todo, BaseModel]] = []
+
+    def handler(commit: Commit[Todo, BaseModel]) -> None:
+        inline_seen.append(commit)
+
+    app = App(
+        id="demo",
+        streams=[todos],
+        subscriptions=[Subscription(id="inline", stream=todos, handler=handler)],
+    )
+    runtime = app.bind(store)
+    first = runtime[todos].create(Todo(text="a", done=False))
+    with runtime.batch() as batch:
+        batch[todos].replace(first, Todo(text="b", done=True))
+    assert inline_seen[1].changed == frozenset({"text", "done"})
     store.close()
 
 

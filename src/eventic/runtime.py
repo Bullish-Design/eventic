@@ -74,7 +74,7 @@ class Collection[AnyT: BaseModel]:
         meta: object | None = None,
     ) -> Revision[AnyT, Any]:
         request = plan_replace(self._app, self._stream, base, state, meta)
-        return self._commit_one(request, state)
+        return self._commit_one(request, base.state)
 
     # -- reads --------------------------------------------------------------
 
@@ -248,7 +248,7 @@ class BatchCollection[AnyT: BaseModel]:
         meta: object | None = None,
     ) -> None:
         request = plan_replace(self._app, self._stream, base, state, meta)
-        self._batch._add(self._stream, request, state)  # type: ignore[reportPrivateUsage]
+        self._batch._add(self._stream, request, base.state)  # type: ignore[reportPrivateUsage]
 
 
 class Runtime:

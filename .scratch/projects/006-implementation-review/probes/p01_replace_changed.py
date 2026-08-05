@@ -1,10 +1,16 @@
-"""R1 — Collection.replace passes the NEW state as the "before" document.
+"""Regression probe: `replace` reports the same `changed` set inline and durable.
 
-Expected per ARCHITECTURE.md §2.2: `changed` is "top-level keys whose canonical
-value differs", and an inline handler and a worker rebuilding the same commit
-from the log must receive field-for-field identical envelopes (§10 / 004/F10).
+F3 (006 review, candidate R1 confirmed): `Collection.replace` passed the NEW
+state as the ``before`` argument to ``_commit_one``, so ``_changed`` diffed the
+new document against itself and always yielded ``frozenset()``. The worker
+reconstructs the true diff from the log, so the two envelopes for the same
+commit disagreed — the exact property ARCHITECTURE.md §2.2 says is guaranteed
+("field-for-field identical envelopes").
 
-Run: .venv/bin/python .scratch/projects/006-implementation-review/probes/p01_replace_changed.py
+Fixed (007 Phase 3): `replace` passes ``base.state``, exactly as `change`
+already did. Same fix in `BatchCollection.replace`.
+
+Run: devenv shell -- uv run python .scratch/.../probes/p01_replace_changed.py
 """
 
 from __future__ import annotations
@@ -51,7 +57,10 @@ from eventic.planning import changed_keys, state_tree  # noqa: E402
 durable = changed_keys(state_tree(todos, t.state), state_tree(todos, t2.state))
 print("worker changed :", sorted(durable))
 
-assert seen[1].changed == frozenset(), "expected the bug: inline replace changed is empty"
+assert seen[1].changed == durable, (
+    f"inline replace changed {sorted(seen[1].changed)} != "
+    f"durable {sorted(durable)}"
+)
 assert durable == {"text", "done"}, durable
-print("\nCONFIRMED: inline replace envelope reports changed=frozenset(),")
-print("           durable reconstruction reports {'done', 'text'}.")
+print("\nOK: inline replace changed == durable changed == {'done', 'text'}.")
+print("    Inline and worker envelopes agree for create, change AND replace.")
