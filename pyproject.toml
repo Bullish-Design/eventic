@@ -20,6 +20,9 @@ migrate = ["alembic>=1.13"]
 test = [
     "pytest>=8.0",
     "hypothesis>=6.0",
+    "coverage>=7.0",
+    "basedpyright>=1.39",
+    "ruff>=0.15",
 ]
 
 [project.scripts]

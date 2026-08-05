@@ -23,20 +23,22 @@ from eventic import Record, connect, on_commit
 
 connect("sqlite:///app.db")
 
+
 class Todo(Record):
     text: str = ""
     done: bool = False
 
-t = Todo(text="learn eventic").save()      # pure construct, then explicit save
-t = t.update(done=True)                     # new version; the original is untouched
-d = t.draft()                               # batch several changes into ONE version
+
+t = Todo(text="learn eventic").save()  # pure construct, then explicit save
+t = t.update(done=True)  # new version; the original is untouched
+d = t.draft()  # batch several changes into ONE version
 d.text = "learn eventic well"
 d.meta["priority"] = "high"
-t = d.commit()                              # commit RETURNS the new version
+t = d.commit()  # commit RETURNS the new version
 
-Todo.get(t.id)                              # latest version (exact version optional)
-Todo.history(t.id)                          # the full version log, oldest → newest
-Todo.where(**{"meta.priority": "high"})     # latest records whose head matches
+Todo.get(t.id)  # latest version (exact version optional)
+Todo.history(t.id)  # the full version log, oldest → newest
+Todo.where(**{"meta.priority": "high"})  # latest records whose head matches
 ```
 
 ## The invariants
@@ -103,13 +105,14 @@ version was committed, and crash-recovery replays compare stable bytes (I5).
 ## Events
 
 ```python
-@on_commit(Todo, kind="create")            # fires after the row is durable
+@on_commit(Todo, kind="create")  # fires after the row is durable
 def log_new(event):
     print("created", event.record.id)
 
+
 @on_commit(Todo, kind="update")
 def log_delta(event):
-    print("changed", event.delta)          # field-level changes
+    print("changed", event.delta)  # field-level changes
 ```
 
 Handlers are keyed by the class object, run in MRO/registration order, and a
@@ -124,7 +127,7 @@ property of the **subscription**:
 
 ```python
 @on_commit(Todo, via="outbox", queue="reindex")
-def reindex(event): ...                    # runs later, as a DBOS step
+def reindex(event): ...  # runs later, as a DBOS step
 ```
 
 ## The Store
@@ -133,9 +136,9 @@ def reindex(event): ...                    # runs later, as a DBOS step
 from eventic import Store
 
 with Store("sqlite:///app.db", create_tables=True):
-    ...                                    # scoped: binds/unbinds the active store
+    ...  # scoped: binds/unbinds the active store
 
-connect("sqlite:///app.db")                # dev sugar: Store + DDL + activate
+connect("sqlite:///app.db")  # dev sugar: Store + DDL + activate
 ```
 
 There is no module-global engine. `Store` defaults `create_tables=False`
@@ -163,7 +166,7 @@ from eventic.contrib.dbos import DbosStore, DbosDispatcher
 
 store = DbosStore(DB_URL, create_tables=True).activate()
 # inside a DBOS workflow or request handler:
-DbosDispatcher(store).drain()              # enqueue one DBOS step per outbox row
+DbosDispatcher(store).drain()  # enqueue one DBOS step per outbox row
 ```
 
 ## Installing

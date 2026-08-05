@@ -17,7 +17,7 @@ from typing import Annotated, Any, TypeVar, Union, get_args, get_origin
 from pydantic import BaseModel, SecretStr, TypeAdapter
 
 from eventic.errors import UndecodableRevision
-from eventic.jsonx import JsonValue, canonical_bytes
+from eventic.jsonx import JsonValue, canonical_bytes, digest
 
 T = TypeVar("T")
 
@@ -45,6 +45,17 @@ def contains_secret(model: type[BaseModel]) -> bool:
 
 
 _SECRET_TYPE = SecretStr
+
+
+def model_fingerprint(model: type[BaseModel]) -> str:
+    """sha256 of the model's JSON schema, key-sorted.
+
+    The fingerprint is stored per ``(stream, schema_version)`` and compared at
+    ``eventic schema check`` time to catch a model change without a version
+    bump.
+    """
+    schema = model.model_json_schema()
+    return digest(canonical_bytes(schema))
 
 
 def _walk_secret(model: type[BaseModel], seen: frozenset[type[BaseModel]]) -> bool:
