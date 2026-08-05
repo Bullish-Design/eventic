@@ -408,8 +408,12 @@ def test_changed_keys_reports_removed_key_through_extra_allow_model() -> None:
         streams=[stream],
         subscriptions=[Subscription(id="i", stream=stream, handler=handler)],
     )
-    ev = app.bind(SQLite(":memory:"))
-    first = ev[stream].create(Loose(a=1, removed=2))
-    replaced = ev[stream].replace(first, Loose(a=1))
-    assert replaced.state.model_dump() == {"a": 1}
-    assert seen[1].changed == frozenset({"removed"})
+    store = SQLite(":memory:")
+    ev = app.bind(store)
+    try:
+        first = ev[stream].create(Loose(a=1, removed=2))
+        replaced = ev[stream].replace(first, Loose(a=1))
+        assert replaced.state.model_dump() == {"a": 1}
+        assert seen[1].changed == frozenset({"removed"})
+    finally:
+        store.close()
