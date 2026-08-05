@@ -201,8 +201,11 @@ def test_changed_keys_create_and_diff() -> None:
     assert changed_keys(before, before) == frozenset()
 
 
-def test_changed_keys_ignores_missing_before_key() -> None:
-    assert changed_keys({"a": 1}, {"b": 2}) == frozenset({"b"})
+def test_changed_keys_reports_removed_and_added_keys() -> None:
+    # a key present only in before (removed) and one only in after (added)
+    # are both changed (F13); the old test asserted the removed key was
+    # invisible, which was the bug.
+    assert changed_keys({"a": 1}, {"b": 2}) == frozenset({"a", "b"})
 
 
 def test_state_tree_is_canonical() -> None:
@@ -369,3 +372,44 @@ def test_redact_error_removes_credentials_and_truncates() -> None:
 def test_disposition_dataclass_shape() -> None:
     d = Disposition(action="dead", error="e")
     assert d.available_at is None
+
+
+def test_changed_keys_reports_a_removed_key() -> None:
+    """F13: a key present in before and absent from after is changed."""
+    from eventic.planning import changed_keys
+
+    assert changed_keys({"a": 1, "removed": 2}, {"a": 1}) == frozenset({"removed"})
+    assert changed_keys({"a": 1}, {"a": 2}) == frozenset({"a"})
+    assert changed_keys(None, {"a": 1}) == frozenset({"a"})
+
+
+def test_changed_keys_reports_removed_key_through_extra_allow_model() -> None:
+    """F13 end-to-end: an extra='allow' stream can drop a top-level key; the
+    inline Commit.changed must include it, and the durable envelope agrees."""
+    from pydantic import BaseModel, ConfigDict
+
+    from eventic.app import App
+    from eventic.envelopes import Commit
+    from eventic.sql import SQLite
+    from eventic.stream import Stream
+    from eventic.subscription import Subscription
+
+    class Loose(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+    seen: list[Commit[Loose, BaseModel]] = []
+
+    def handler(c: Commit[Loose, BaseModel]) -> None:
+        seen.append(c)
+
+    stream = Stream(Loose, name="loose")
+    app = App(
+        id="d",
+        streams=[stream],
+        subscriptions=[Subscription(id="i", stream=stream, handler=handler)],
+    )
+    ev = app.bind(SQLite(":memory:"))
+    first = ev[stream].create(Loose(a=1, removed=2))
+    replaced = ev[stream].replace(first, Loose(a=1))
+    assert replaced.state.model_dump() == {"a": 1}
+    assert seen[1].changed == frozenset({"removed"})

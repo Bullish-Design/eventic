@@ -115,10 +115,18 @@ def plan_replace(
 
 
 def changed_keys(before: JsonObject | None, after: JsonObject) -> frozenset[str]:
-    """Top-level keys whose canonical value differs; all keys on create."""
+    """Top-level keys whose canonical value differs; all keys on create.
+
+    A key present in ``before`` and absent from ``after`` is changed too (F13)
+    — reachable for ``extra="allow"`` streams and top-level ``dict[str, Any]``
+    fields. ``delta/1`` already handles removal via tombstones; this is the
+    ``Commit.changed`` view.
+    """
     if before is None:
         return frozenset(after)
-    return frozenset(k for k in after if before.get(k) != after[k])
+    return frozenset(before.keys() ^ after.keys()) | frozenset(
+        k for k in after.keys() & before.keys() if before[k] != after[k]
+    )
 
 
 def state_tree(stream: Stream[Any], state: object) -> JsonObject:
