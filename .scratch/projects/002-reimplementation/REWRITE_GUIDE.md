@@ -504,3 +504,28 @@ Appendix B). Each row: date · step · deviation · reason.
   implementations cannot share one module path, so the new module carries the
   working name `eventbus.py`; it is `git mv`'d to `events.py` in Step 12 when
   the old tests are deleted. The final module map is unchanged.
+
+- **2026-08-04 · Step 3 · D2 — the replay/no-op check compares `(version_id,
+  data)`, not `version_id` alone.** The guide's `append` sketch does
+  `if existing == row["version_id"]: return` to distinguish a byte-identical
+  replay from a different writer. But under I4 `version_id` is
+  content-*independent* (`uuid5("eventic:{id}:{version}")`), so two different
+  writers at the same `(id, version)` produce the *same* `version_id` — that
+  check would silently classify B's write as a replay and drop it, re-opening
+  R-C1. The implemented append compares `(existing.version_id == row[version_id]
+  and existing.data == row[data])`; only a fully byte-identical row is the
+  silent no-op, everything else raises `StaleVersionError` (I5 as written in
+  CONCEPT: "only a byte-identical replay is a silent no-op").
+- **2026-08-04 · Step 3 · D3 — `_uuid5` lives in `plugins/identity.py`, not
+  `record.py`.** The guide sketch places it in `record.py`, but
+  `plugins/identity.py` needs it and imports it from `record.py`, creating a
+  cycle (`record → plugins.identity → record`). Identity is the natural leaf
+  home; `record.py` imports it back. No behavior change.
+- **2026-08-04 · Step 3 · D4 — the codec carries a `fetch()` read-hint.** The
+  guide's Step 3 gives the pipeline `latest/at/stream/query` primitives and a
+  `decode(rows)` that returns `rows[-1].data`, but nothing says how `get(id)`
+  decides between "fetch one row" (cheap for `FullSnapshot`) and "fetch the
+  whole stream" (needed by a diff codec). The pipeline calls
+  `codec.fetch(persistence, id, class_type, version=...)` — `FullSnapshot`
+  returns `[latest]`/`[at]`; `DiffStorage` (Step 8) will override it to stream
+  from the nearest snapshot. Keeps `decode` pure and the pipeline codec-agnostic.

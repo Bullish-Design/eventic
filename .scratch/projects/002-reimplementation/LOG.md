@@ -135,3 +135,28 @@ all confirm the documented bugs against the current code.
 
 **Verified:** skeleton imports cleanly; old suite still **28 green**.
 **Committed:** `Step 0: skeleton + errors`.
+
+## 2026-08-04 — Session 3 (cont.) — Steps 1–3
+
+**Step 1 — connect() + engine registry + models.** `connect(url, *,
+create_tables=True)` with re-connect swap + dispose; `engine()` raises
+`NotConnected` pre-connect; `_reset()` test hook; `models.py` `records` table
+(no `properties` column; `(id, version)` unique; `ix_records_id_ver`; JSONB
+variant). 4 tests, 0.10s. Old suite untouched.
+
+**Step 2 — Record pure construction.** `Record` = plain pydantic (not frozen,
+no metaclass), managed fields id/version/version_id/created_ts/meta,
+`model_post_init` stamps deterministic uuid5 v0 identity only (I3/I4).
+`test_construction_writes_nothing` proves construction is I/O-free even while
+connected. 9 core tests total.
+
+**Step 3 — persistence + codec + identity + explicit writes.**
+`SingleTableJSONB.append` loud-conflict logic; `latest/at/stream/query` row
+primitives; `FullSnapshot` encode/decode + `fetch` read-hint; `Uuid5Deterministic`;
+`record.save/update/commit/get/history/where` through `pipeline.commit_version`
+and `pipeline.read/history`. Deviations D2 (replay check must compare
+`(version_id, data)` — see appendix), D3 (`_uuid5` moved to identity plugin to
+break an import cycle), D4 (codec `fetch` read-hint). **probe_02's scenario now
+raises `StaleVersionError`** (verified inline); 21 core tests in 0.70s; old
+suite still 28 green.
+**Committed:** Steps 1, 2, 3.
