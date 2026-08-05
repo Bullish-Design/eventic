@@ -2,22 +2,20 @@
 Record / Hydrate kernel – *pure Pydantic* (no Postgres or DBOS imports).
 
 * Any attribute write ➜ copy-on-write ➜ new immutable version ➜ store.append()
-* Public methods are auto-wrapped with an enqueue decorator (defined in
-  eventic.queues.dispatcher) so each subclass has its own DBOS queue.
+* Methods explicitly marked with @evented are scheduled on the per-class DBOS
+  queue (opt-in; everything else is left untouched — see queues.dispatcher).
 """
 
 from __future__ import annotations
 
 import re
 import uuid
-from functools import wraps
-from typing import Any, Dict, Type, TypeVar
+from typing import Any, ClassVar, Type, TypeVar
 
 from pydantic import BaseModel, Field
 
 from dbos import Queue
 from .properties import PropertiesBase
-# from .events import emit_update, emit_create
 
 
 T_Record = TypeVar("T_Record", bound="Record")
@@ -30,25 +28,27 @@ def _snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
-# metaclass that injects queue wrappers
+# metaclass that attaches per-class metadata + wraps ONLY @evented methods
 class RecordMeta(ModelMeta):
-    """Attach `_queue_name` and wrap public methods at class-creation time."""
+    """Attach `_queue_name` and a single per-class Queue; wrap only methods
+    explicitly marked with @evented (C2/C3/M7)."""
 
     def __new__(mcls, name: str, bases, ns, **kw):
         cls = super().__new__(mcls, name, bases, ns)  # create class first
         if name == "Record":  # skip abstract base
             return cls
 
-        queue_name = f"queue_{_snake(name)}"
-        cls._queue_name = queue_name
-        cls.queue = Queue(queue_name, concurrency=1)
+        cls._queue_name = f"queue_{_snake(name)}"
+        cls.queue = Queue(cls._queue_name, concurrency=1)  # single declaration (M7)
 
         # late import – avoids circular dep
-        from eventic.queues.dispatcher import evented
+        from eventic.queues.dispatcher import _queue_method
 
         for attr, fn in ns.items():
-            if callable(fn) and not attr.startswith("_") and attr != "model_post_init":
-                setattr(cls, attr, evented(queue_name)(fn))
+            if getattr(fn, "__eventic_evented__", False):  # ONLY explicitly marked
+                setattr(cls, attr, _queue_method(fn))
+            # everything else — staticmethods, classmethods, properties, and any
+            # model_* internals — is left completely untouched (C3)
 
         return cls
 
@@ -65,7 +65,7 @@ class Record(BaseModel, metaclass=RecordMeta):
     _store: ClassVar["RecordStore" | None] = None  # injected by init_eventic()
     model_config = {"frozen": True, "extra": "allow", "arbitrary_types_allowed": True}
 
-    # ensure properties exists & has record_type
+    # ensure properties exists & has record_type; persist durable v0 (C5)
     def model_post_init(self, _ctx):
         is_new = self.id is None
 
@@ -77,21 +77,24 @@ class Record(BaseModel, metaclass=RecordMeta):
                 "properties",
                 PropertiesBase(record_type=self.__class__.__name__),
             )
+            self.properties._bind(self)  # H1 — see Step 5.1
         elif self.properties.record_type == "":
             object.__setattr__(self.properties, "record_type", self.__class__.__name__)
+            self.properties._bind(self)
 
-        # Emit create event for new instances
         if is_new and self.version == 0:
             from eventic.events import emit_create
 
-            emit_create(self)
+            if self._store is not None:
+                self._store.append(self)  # durable v0 — the row now exists
+            emit_create(self)  # handlers can hydrate (H6 timing)
 
     # copy‑on‑write mutation
     def __setattr__(self, name: str, value: Any):
         if name.startswith("_"):
             return super().__setattr__(name, value)
 
-        data = self.model_dump(mode="python")  # "json")
+        data = self.model_dump(mode="python")
         data[name] = value
 
         data["version"] = self.version + 1
