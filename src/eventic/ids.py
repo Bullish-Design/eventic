@@ -20,7 +20,7 @@ NS = UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 _STREAM_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 
 
-def _validate_stream_name(value: Any) -> str:
+def validate_stream_name(value: Any) -> str:
     if not isinstance(value, str):
         raise ValueError("stream name must be a string")
     if not _STREAM_NAME_RE.match(value):
@@ -30,7 +30,7 @@ def _validate_stream_name(value: Any) -> str:
     return value
 
 
-StreamName = Annotated[str, BeforeValidator(_validate_stream_name)]
+StreamName = Annotated[str, BeforeValidator(validate_stream_name)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +41,7 @@ class AggregateKey:
     aggregate_id: UUID
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "stream", _validate_stream_name(self.stream))
+        object.__setattr__(self, "stream", validate_stream_name(self.stream))
 
 
 def revision_id(stream: str, aggregate_id: UUID, revision: int) -> UUID:

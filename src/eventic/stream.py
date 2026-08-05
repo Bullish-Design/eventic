@@ -13,7 +13,7 @@ from pydantic import BaseModel, RootModel, TypeAdapter
 from eventic.canonical import build_exclude_map, contains_secret, model_fingerprint
 from eventic.errors import ConfigError
 from eventic.evolution import Upcaster, validate_chain
-from eventic.ids import _validate_stream_name
+from eventic.ids import validate_stream_name
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -30,23 +30,25 @@ class Stream[T: BaseModel]:
     model: type[T]
     name: str
     schema_version: int = 1
-    upcasters: Mapping[int, Upcaster] = field(default_factory=dict)
+    upcasters: Mapping[int, Upcaster] = field(default_factory=dict[int, Upcaster])
     adapter: TypeAdapter[Any] = field(init=False, repr=False)
     exclude_map: Mapping[str, Any] = field(init=False, repr=False)
     fingerprint: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        if not (isinstance(self.model, type) and issubclass(self.model, BaseModel)):
+        # Deliberate runtime guards at a public boundary: callers are not
+        # statically typed, so the type system's guarantees do not hold here.
+        if not isinstance(self.model, type) or not issubclass(self.model, BaseModel):  # type: ignore[reportUnnecessaryIsInstance, reportUnnecessaryIsinstance]
             raise ConfigError(
                 "stream model must be a pydantic BaseModel subclass "
                 f"(got {self.model!r})"
             )
-        if issubclass(self.model, RootModel):
+        if issubclass(self.model, RootModel):  # type: ignore[reportUnnecessaryIsInstance]
             raise ConfigError(
                 "RootModel streams are not supported; use a plain BaseModel"
             )
-        object.__setattr__(self, "name", _validate_stream_name(self.name))
-        if not isinstance(self.schema_version, int) or self.schema_version < 1:
+        object.__setattr__(self, "name", validate_stream_name(self.name))
+        if not isinstance(self.schema_version, int) or self.schema_version < 1:  # type: ignore[reportUnnecessaryIsInstance]
             raise ConfigError("schema_version must be an int >= 1")
         if contains_secret(self.model):
             raise ConfigError(

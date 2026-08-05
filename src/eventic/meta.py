@@ -23,17 +23,17 @@ class Meta[M: BaseModel]:
 
     model: type[M]
     version: int = 1
-    upcasters: Mapping[int, Upcaster] = field(default_factory=dict)
+    upcasters: Mapping[int, Upcaster] = field(default_factory=dict[int, Upcaster])
     adapter: TypeAdapter[Any] = field(init=False, repr=False)
     exclude_map: Mapping[str, Any] = field(init=False, repr=False)
     fingerprint: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        if not (isinstance(self.model, type) and issubclass(self.model, BaseModel)):
+        if not isinstance(self.model, type) or not issubclass(self.model, BaseModel):  # type: ignore[reportUnnecessaryIsInstance, reportUnnecessaryIsinstance]
             raise ConfigError(
                 f"meta model must be a pydantic BaseModel subclass (got {self.model!r})"
             )
-        if not isinstance(self.version, int) or self.version < 1:
+        if not isinstance(self.version, int) or self.version < 1:  # type: ignore[reportUnnecessaryIsInstance]
             raise ConfigError("meta version must be an int >= 1")
         if contains_secret(self.model):
             raise ConfigError("SecretStr fields are not supported in meta")
@@ -48,7 +48,9 @@ class Meta[M: BaseModel]:
         object.__setattr__(self, "fingerprint", model_fingerprint(self.model))
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Meta) and self.model is other.model
+        if not isinstance(other, Meta):
+            return False
+        return self.model is other.model  # type: ignore[reportUnknownMemberType]
 
     def __hash__(self) -> int:
         return hash(self.model)
