@@ -305,3 +305,33 @@ old test files were already removed at Step 9 (D18). Grep gate clean
 (`RecordMeta|evented|Eventic(|PropertiesBase|_owner` → nothing); old module
 names are unimportable; 86 tests green; demo runs; `import eventic` DBOS-free.
 **Committed:** Steps 11, 12.
+
+## 2026-08-04 — Session 3 (cont.) — Step 13 (final validation)
+
+**Step 13 — the validation matrix:**
+
+| check | result |
+|---|---|
+| Core import is DBOS-free (I6) | `python -c "import sys, eventic; assert 'dbos' not in sys.modules"` → OK |
+| Core suite (fast) | 59 passed + 1 skipped (skipped = postgres-marked PG round-trip); invariant core ~1.7s (R-P3) |
+| Plugin suite | 18 passed |
+| DBOS suite | 9 passed (gated on the extra) |
+| No hidden writes (I2/I3) | `test_construction_writes_nothing` green |
+| Loud conflicts (I5) | `test_two_writers_raise_stale_version` green (probe_02 scenario raises) |
+| Post-commit events (I7) | `test_handler_fires_post_commit_and_sees_row` green |
+| Plugin conflict at definition | `test_two_codecs_conflict` green |
+| Migrations round-trip | `alembic upgrade head && downgrade base` green on SQLite; PG branch `postgres`-marked |
+| Warnings clean | `pytest -W error` → 86 passed + 1 skipped |
+| Demo works | `python -m eventic.examples.demo` runs end-to-end |
+| One commit per step | git log shows Step 0…Step 13 |
+
+Also: **probe_06** (the missing Step-8 probe — diff reconstruction across the
+snapshot boundary, byte-identical vs FullSnapshot, exact-version reads loud).
+Added a shared `src/tests/conftest.py` GC hook so leaked sqlite connections
+surface their ResourceWarning at the leaking test (fixed migration-test engine
+leaks by disposing). Tag `0.2.0-alpha` exists from Phase 1.
+
+**Rewrite complete.** `src/eventic/` is now: connect, errors, events, models,
+pipeline, record, plugins/{persistence,codec,identity,delivery,interceptor},
+dbos/ (optional), examples/{demo,webhook}. A newcomer reads one sitting:
+`Model(...)` is pure, `.save()` persists v0, `.update()` returns a new version.

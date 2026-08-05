@@ -45,9 +45,11 @@ def _old_schema_and_row(url):
     insert one old-shape row — the honest old-install path."""
     command.upgrade(_cfg(url), "6725d5d5ed38")  # the 0.1 initial (with properties)
     eng = create_engine(url)
+    eng.dispose()  # fresh file engine for the insert below (avoids ResourceWarning)
+    eng2 = create_engine(url)
     rid = uuid.uuid4()
     props = {"record_type": "Story", "status": "published"}
-    with Session(eng) as s:
+    with Session(eng2) as s:
         s.execute(
             text(
                 "INSERT INTO records (version_id, id, version, class_type, "
@@ -72,6 +74,7 @@ def _old_schema_and_row(url):
             },
         )
         s.commit()
+    eng2.dispose()
     return rid
 
 
@@ -126,6 +129,7 @@ def test_old_library_row_hydrates_after_fold(tmp_path, clean):
     with eng.connect() as c:
         cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
     assert "properties" not in cols
+    eng.dispose()
 
     connect(url)
     story = Story.get(rid)
@@ -141,18 +145,21 @@ def test_upgrade_downgrade_roundtrip_sqlite(tmp_path, clean):
     with eng.connect() as c:
         cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
     assert "properties" not in cols
+    eng.dispose()
 
     # one step down re-adds properties (fold's downgrade)
     command.downgrade(_cfg(url), "a1b2c3d4e5f6")
     with eng.connect() as c:
         cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
     assert "properties" in cols
+    eng.dispose()
 
     # and back up
     command.upgrade(_cfg(url), "head")
     with eng.connect() as c:
         cols = [r[1] for r in c.execute(text("PRAGMA table_info(records)"))]
     assert "properties" not in cols
+    eng.dispose()
 
 
 def test_downgrade_rebuilds_properties_from_meta(tmp_path, clean):
@@ -180,10 +187,13 @@ def test_downgrade_rebuilds_properties_from_meta(tmp_path, clean):
             },
         )
         s.commit()
+    eng.dispose()
 
     command.downgrade(_cfg(url), "a1b2c3d4e5f6")
-    with create_engine(url).connect() as c:
+    eng2 = create_engine(url)
+    with eng2.connect() as c:
         metas = c.execute(text("SELECT properties FROM records ORDER BY version")).scalars().all()
+    eng2.dispose()
     # every row's properties was rebuilt from data.meta (raw TEXT: JSON is stored
     # as text in SQLite and decoded by the ORM JSON type on typed reads)
     parsed = [json.loads(m) for m in metas]
