@@ -1,0 +1,47 @@
+# Advisory project metadata, read by copyroom (inspect/status) and repoman.
+# Every field is optional and defaulted; this declares origin, conventions, hooks.
+copyroom:
+  version: 1
+
+project:
+  kind: generated-project
+  name: eventic
+  template_id: py
+  template_ref_policy: tagged
+  answers_file: .copier-answers.yml
+
+git:
+  default_branch: main
+  require_clean_worktree: true
+
+context:
+  docs: [README.md]
+  source: [src/, tests/]
+  config: [pyproject.toml, .copier-answers.yml]
+
+devenv:
+  enabled: true
+  shell_command: devenv shell
+
+agent:
+  # Agent-files convention (copyroom docs/user/agent-files.md): skills live at
+  # .agents/skills/, AGENTS.md is canonical, CLAUDE.md symlinks to it, and
+  # `overlay` declares skills this repo permanently diverges on (mapped to
+  # Copier --exclude on update). All fields defaulted; unknown fields ignored.
+  skills_dir: .agents/skills
+  instructions: AGENTS.md
+  claude_symlink: true
+  overlay: []
+
+commands:
+  # Birth (runs only with `copyroom new --trust`): pull the pinned manager
+  # toolchain into the venv, put the repo under gitman (jj + colocated git),
+  # and seed trunk's first commit from the rendered files.
+  post_project_create:
+    - "devenv shell -- repoman-sync"
+    # put the repo under gitman (jj + colocated git — gitman bootstraps the git
+    # itself), then seed trunk's first commit from the rendered files.
+    - "devenv shell -- gitman init --colocate --trunk main"
+    - "devenv shell -- gitman seed -m 'Initial generation'"
+  check:
+    - "devenv shell -- repoman doctor"

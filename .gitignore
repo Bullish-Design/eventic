@@ -1,3 +1,14 @@
+# devenv
+.devenv/
+.devenv.flake.nix
+devenv.local.nix
+
+# direnv
+.direnv/
+
+# copyroom scratch (template-edit previews/worktrees)
+.copyroom/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -35,3 +46,15 @@ alembic.ini
 .DS_Store
 
 # Scratch / working notes (review artifacts versioned in e76d0a1)
+
+# Agent-files convention (see AGENTS.md): .agents/skills/ (skills) and
+# .agents/devenv/ (devenv-literacy docs) are tracked, as are AGENTS.md and
+# CLAUDE.md. The rest of .agents/ (e.g. .agents/pi/) is platform/tool runtime
+# state and stays ignored — .agents/ is dual-use on purpose.
+.agents/**
+!.agents/skills/
+!.agents/skills/**
+!.agents/devenv/
+!.agents/devenv/**
+!AGENTS.md
+!CLAUDE.md

@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
+#
+# eventic — a repoman-managed Python devenv repo.
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+
+  # Required for languages.python.version to resolve. eventic declares
+  # requires-python = ">=3.13" and CI pins the 3.13 matrix leg; without this
+  # input the version pin is silently ignored and the shell serves whatever
+  # nixpkgs rolling currently defaults to (3.14 as of this writing).
+  nixpkgs-python:
+    url: github:cachix/nixpkgs-python
+
+  # RepoMan meta-module: one import wires in the selected *man managers and their
+  # tasks/scripts/toolchains. Dev: a local path to repoman's modules/ dir.
+  # Fleet: github:Bullish-Design/repoman?dir=modules&ref=vX.Y.Z
+  repoman:
+    url: path:/home/andrew/Documents/Projects/repoman/modules
+    flake: false
+
+  # shellij: durable Zellij workbenches, installed by default (not a roster
+  # manager) — RepoMan presence-imports shellij's own devenv module when this
+  # input is declared: shellij/zellij/yazi packages, the guarded `shellij open`
+  # enterShell hook, and YAZI_CONFIG_HOME pointing at the packaged Yazi assets.
+  # Dev: a local path to shellij's checkout. Fleet: github:Bullish-Design/shellij
+  shellij:
+    url: path:/home/andrew/Documents/Projects/shellij
+    flake: false
+
+imports:
+  - repoman
