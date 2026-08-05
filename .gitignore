@@ -20,6 +20,9 @@ env/
 # Local config
 .env
 .env.*
+*.db
+*.db-wal
+*.db-shm
 dbos-config.yaml
 alembic.ini
 
