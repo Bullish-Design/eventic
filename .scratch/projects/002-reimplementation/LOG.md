@@ -93,3 +93,14 @@ conclusions as two new design documents:
 These two are conceptual/forward-looking; they don't change the Plan's first three
 (already-green) steps. `TARGET_ARCHITECTURE.md` §1 (events) and the `eventic.dbos`
 adapter should be re-expressed in plugin/seam terms on its next revision.
+
+**Also produced:** `REWRITE_GUIDE.md` — a detailed step-by-step guide for a *complete*
+rewrite of the library around CONCEPT + PLUGINS (distinct from the incremental
+`REIMPLEMENTATION_PLAN.md`). 14 steps in 6 phases: invariant core (Phase 1, shippable
+DBOS-free 0.2-alpha) → extract the five-seam plugin framework (Phase 2) → DBOS delivery
+plugin (Phase 3) → diff-storage codec plugin (Phase 4, the second plugin that justifies
+the framework) → public surface + data migration + docs (Phase 5) → delete old code +
+validation (Phase 6). One commit per step, exit gates, rollback, and a finding→step map
+closing every R-* finding. Honors the PLUGINS §8.5 guardrail: framework extracted only
+once the second real plugin needs it; each phase ends shippable so scope can be trimmed.
+Suggested build branch: `rewrite/plugin-core` off this one.
