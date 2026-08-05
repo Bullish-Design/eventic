@@ -139,3 +139,45 @@ def test_scenario_step_names_present() -> None:
     for scenario in scenarios.SCENARIOS:
         for step in scenario.steps:
             assert step.name, f"{scenario.name} has an unnamed step"
+
+
+def test_head_upsert_failure_leaves_no_log_row() -> None:
+    """Phase 6 'Atomicity' row: head upsert fails -> no log row (I8).
+
+    The scenario DSL cannot inject a failure into the store, so this lives
+    next to the suite as a conformance-style test — the same boundary probe
+    p05 exercises, as a standing assertion (R4, F5).
+    """
+    import pytest
+    from pydantic import BaseModel
+
+    from eventic import App, Stream
+    from eventic.errors import EventicError
+    from eventic.ids import AggregateKey
+    from eventic.sql import SQLite
+
+    class T(BaseModel):
+        n: int = 0
+
+    todos = Stream(T, name="todos")
+    store = SQLite(":memory:")
+    ev = App(id="d", streams=[todos]).bind(store)
+    try:
+        first = ev[todos].create(T(n=1))
+        original_upsert = store.dialect.upsert_head
+
+        def exploding_upsert(values: object) -> object:
+            raise RuntimeError("forced head-upsert failure")
+
+        object.__setattr__(store.dialect, "upsert_head", exploding_upsert)
+        try:
+            with pytest.raises(EventicError):
+                ev[todos].change(first, n=2)
+        finally:
+            object.__setattr__(store.dialect, "upsert_head", original_upsert)
+        key = AggregateKey("todos", first.id)
+        assert store.head(key).revision == 0
+        assert store.revision(key, 1) is None
+        assert store.revision(key, 0) is not None
+    finally:
+        store.close()

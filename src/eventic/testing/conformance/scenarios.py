@@ -362,6 +362,60 @@ BATCH: tuple[Scenario, ...] = (
             ),
         ),
     ),
+    Scenario(
+        "batch results preserve request order",
+        steps=(
+            Batch(
+                name="three creates, distinct aggregates",
+                commits=(
+                    Commit(
+                        name="first",
+                        stream="todos",
+                        aggregate_id=_A,
+                        expected_revision=None,
+                        kind="create",
+                        schema_version=1,
+                        payload=canonical_bytes(_DOC1),
+                        digest=digest(canonical_bytes(_DOC1)),
+                        meta=canonical_bytes({}),
+                        meta_version=1,
+                        expect_revision=0,
+                    ),
+                    Commit(
+                        name="second",
+                        stream="todos",
+                        aggregate_id=_B,
+                        expected_revision=None,
+                        kind="create",
+                        schema_version=1,
+                        payload=canonical_bytes(_DOC2),
+                        digest=digest(canonical_bytes(_DOC2)),
+                        meta=canonical_bytes({}),
+                        meta_version=1,
+                        expect_revision=0,
+                    ),
+                    Commit(
+                        name="third",
+                        stream="todos",
+                        aggregate_id=UUID(int=3),
+                        expected_revision=None,
+                        kind="create",
+                        schema_version=1,
+                        payload=canonical_bytes(_DOC3),
+                        digest=digest(canonical_bytes(_DOC3)),
+                        meta=canonical_bytes({}),
+                        meta_version=1,
+                        expect_revision=0,
+                    ),
+                ),
+            ),
+            # the runner asserts results[i].revision == commits[i].expect_revision,
+            # so a store returning results out of request order fails here.
+            head_step("todos", _A, expect_payload=_DOC1),
+            head_step("todos", _B, expect_payload=_DOC2),
+            head_step("todos", UUID(int=3), expect_payload=_DOC3),
+        ),
+    ),
 )
 
 # ---------------------------------------------------------------------------
