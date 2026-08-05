@@ -11,9 +11,18 @@ ROOT = Path(eventic.__file__).resolve().parent.parent.parent
 
 
 def _source_files() -> list[Path]:
-    return sorted(ROOT.joinpath("src").rglob("*.py")) + sorted(
-        ROOT.joinpath("docs").rglob("*.md")
+    """Every scanned documentation surface: src, docs, and root *.md.
+
+    README.md lives at the repo root and is the only file whose code blocks
+    run as doctests (F14). AGENTS.md / CLAUDE.md are a symlink pair; resolve()
+    dedupes them so neither is read twice.
+    """
+    paths = (
+        sorted(ROOT.joinpath("src").rglob("*.py"))
+        + sorted(ROOT.joinpath("docs").rglob("*.md"))
+        + sorted(ROOT.glob("*.md"))
     )
+    return sorted({p.resolve() for p in paths})
 
 
 def test_exactly_once_appears_nowhere() -> None:
