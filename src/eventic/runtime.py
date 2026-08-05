@@ -8,7 +8,7 @@ dispatches inline handlers. ``Batch`` accumulates requests and issues one
 from __future__ import annotations
 
 import json
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel
@@ -268,13 +268,13 @@ class Runtime:
     def store(self) -> Store:
         return self._store
 
-    def __getitem__(self, stream: Stream[AnyT]) -> Collection[AnyT]:
+    def __getitem__[T: BaseModel](self, stream: Stream[T]) -> Collection[T]:
         declared = next((s for s in self._app.streams if s.name == stream.name), None)
         if declared is None:
             raise UsageError(f"stream {stream.name} is not installed in this app")
         if stream.name not in self._collections:
             self._collections[stream.name] = Collection(self, declared)
-        return self._collections[stream.name]  # type: ignore[return-value]
+        return cast(Collection[T], self._collections[stream.name])
 
     def batch(self) -> Batch:
         return Batch(self)

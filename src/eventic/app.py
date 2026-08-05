@@ -8,7 +8,8 @@ together, one line per failure.
 from __future__ import annotations
 
 import inspect
-from typing import Any, Literal, get_origin
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Literal, get_origin
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -16,6 +17,10 @@ from eventic.errors import CapabilityUnsupported, ConfigError
 from eventic.meta import Meta, NoMeta
 from eventic.stream import Stream
 from eventic.subscription import Outbox, Subscription
+
+if TYPE_CHECKING:
+    from eventic.protocols import Store
+    from eventic.runtime import Runtime
 
 InlineErrorMode = Literal["raise", "log"]
 
@@ -82,9 +87,9 @@ class App(BaseModel):
     )
 
     id: str
-    streams: tuple[Stream[Any], ...] = ()
+    streams: Sequence[Stream[Any]] = ()
     meta: Meta[Any] = NoMeta
-    subscriptions: tuple[Subscription[Any, Any], ...] = ()
+    subscriptions: Sequence[Subscription[Any, Any]] = ()
     on_inline_error: InlineErrorMode = "raise"
 
     @model_validator(mode="after")
@@ -114,9 +119,11 @@ class App(BaseModel):
 
         if problems:
             raise ConfigError("\n".join(problems))
+        object.__setattr__(self, "streams", tuple(self.streams))
+        object.__setattr__(self, "subscriptions", tuple(self.subscriptions))
         return self
 
-    def bind(self, store: Any) -> Any:
+    def bind(self, store: Store) -> Runtime:
         """Capability check, then a ``Runtime`` bound to ``store``.
 
         Opens no connection.
@@ -131,4 +138,4 @@ class App(BaseModel):
             )
         from eventic.runtime import Runtime
 
-        return Runtime(app=self, store=store)
+        return Runtime(app=self, store=store)  # type: ignore[assignment]

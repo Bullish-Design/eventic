@@ -49,6 +49,7 @@ exclude = [
 addopts = "-ra"
 markers = [
     "postgres: integration tests requiring a live Postgres service (CI only)",
+    "slow: wheel/clean-install tests that build and install artifacts",
 ]
 
 [tool.ruff]
