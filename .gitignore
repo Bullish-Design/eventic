@@ -35,7 +35,6 @@ env/
 *.db-wal
 *.db-shm
 dbos-config.yaml
-alembic.ini
 
 # Editor
 .idea/
