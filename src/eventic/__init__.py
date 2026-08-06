@@ -12,7 +12,7 @@ from eventic.meta import NoMeta
 from eventic.stream import Stream
 from eventic.subscription import Backoff, Inline, Outbox, Subscription
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 __all__ = [
     "App",

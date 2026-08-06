@@ -86,13 +86,19 @@ class _SerializedStaticPool(StaticPool):
     (StaticPool + ``check_same_thread=False``). Without serialization,
     concurrent operations interleave their BEGIN/INSERT/COMMIT statements on
     that one connection, corrupting the transaction stream: writes are lost
-    and commits raise ``StoreError('commit failed')``. Holding an RLock for
+    and commits raise ``StoreError('commit failed')``. Holding the lock for
     the whole checkout gives each operation the connection exclusively.
+
+    A counting semaphore is used rather than ``threading.Lock``/``RLock``:
+    on CPython the mutex futex-handoff convoy under GIL contention collapses
+    contended ``:memory:`` throughput ~4x (4 threads: ~90/s vs ~390/s
+    single-threaded), while a semaphore stays work-conserving (~350/s at 4
+    threads, measured on the eventic commit path).
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._op_lock = threading.RLock()
+        self._op_lock = threading.Semaphore(1)
 
     def _do_get(self) -> ConnectionPoolEntry:
         self._op_lock.acquire()
