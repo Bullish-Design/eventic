@@ -165,7 +165,7 @@ with store3.engine.begin() as conn:
                 status="pending",
                 attempts=0,
                 available_at=base,
-                created_at=base.replace(second=base.second + i),
+                created_at=base + __import__("datetime").timedelta(seconds=i),
             )
         )
 rows, cursor = admin.list_intents(limit=2)

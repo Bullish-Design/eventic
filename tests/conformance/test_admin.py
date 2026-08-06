@@ -222,7 +222,7 @@ def test_list_intents_respects_limit_and_cursor_roundtrips(tmp_path: Path) -> No
     store = _seed_many(tmp_path, aggregates=1)
     admin = SqlAdmin(store)
     # insert intents directly (ordering is by created_at, intent_id)
-    from datetime import UTC, datetime
+    from datetime import UTC, datetime, timedelta
 
     base = datetime.now(UTC)
     with store.engine.begin() as conn:
@@ -236,7 +236,7 @@ def test_list_intents_respects_limit_and_cursor_roundtrips(tmp_path: Path) -> No
                     status="pending",
                     attempts=0,
                     available_at=base,
-                    created_at=base.replace(second=base.second + i),
+                    created_at=base + timedelta(seconds=i),
                 )
             )
 

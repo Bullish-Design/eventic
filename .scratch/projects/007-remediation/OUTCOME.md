@@ -77,6 +77,16 @@ invisible behind the five skips:
   reasoning in the test and the commit message — no assertion was weakened.
 - **A leaked `:memory:` store in the F13 test** caused a nondeterministic
   unraisable-ResourceWarning that failed `-W error`; closed (`0eee4f1`).
+- **`test_list_intents` used `base.replace(second=base.second + i)`** to spread
+  seven intents across distinct timestamps — when the test ran with a clock
+  second ≥ 54, `second + i` overflowed and raised
+  `ValueError: second must be in 0..59`, skipping `store.close()` and leaking
+  the SQLite pool connection, which then surfaced as a
+  `PytestUnraisableExceptionWarning` on whichever test ran at the GC — the
+  intermittent `-W error` failures that dogged the final verification. Fixed
+  with `base + timedelta(seconds=i)` (and the same pattern in probe p05);
+  verified with 10 consecutive `test_admin` runs and 3 consecutive full runs,
+  all green.
 
 ## Decisions recorded
 
