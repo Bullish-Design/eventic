@@ -29,6 +29,12 @@ the *same* worktree, so edits persist across `template-test` and
 
 - **Preview only.** Nothing is applied; after previewing, commit/tag the change
   in the template repo and apply it with `copyroom update <ref>`.
+- **This loop edits the base layer's template only.** `template-checkout` reads
+  `.copier-answers.yml` and has no `--layer` flag. In a repo with overlay layers
+  it always picks the genome. To change an overlay template, edit that template's
+  own repo. Tag it, then run `copyroom update --layer <name>`. Run
+  `copyroom layer list` to find which template owns a file. See
+  `docs/user/layers.md`.
 - **`.copier-answers.yml` churn in the preview diff is expected metadata**, not a
   content change — its recorded `_commit` advances on update.
 - **Conflicts/rejects are information, not failure** — they show where the
