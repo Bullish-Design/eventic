@@ -21,4 +21,26 @@
     venv.enable = true;
     uv.enable = true;
   };
+
+  # devman — the automation plane (CONCEPT.md §5). `base` alone: this repository
+  # ships no scheduled work and writes none of its own files.
+  devman = {
+    enable = true;
+    project = "eventic";
+    groups = [ "base" ];
+  };
+
+  # https://devenv.sh/tasks/
+  #
+  # The two task names the `base` group calls (groups/base/README.md). devenv
+  # owns each implementation; Dagu owns the composition (§6). pytest and ruff
+  # live in the `test` extra (not `dev`), so the flag is `--extra test`
+  # (STAGE_7_LOG.md, wave 2b). `ruff check src` matches the repo's own scope.
+  tasks = {
+    "eventic:lint".exec = "uv run --extra test ruff check src";
+    "eventic:test".exec = "uv run --extra test pytest";
+
+    "base:check".after = [ "eventic:lint" ];
+    "base:test".after = [ "eventic:test" ];
+  };
 }

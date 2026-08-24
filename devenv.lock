@@ -17,6 +17,26 @@
         "type": "github"
       }
     },
+    "devman": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1787582917,
+        "narHash": "sha256-V304PmSZW/GwTLuJgcLLdws3Qg0DVdsCZMlIIdMUpPk=",
+        "ref": "main",
+        "rev": "f20a9c11cd6b062aa6646e8b72b9767d7e90a522",
+        "revCount": 275,
+        "type": "git",
+        "url": "https://github.com/Bullish-Design/devman"
+      },
+      "original": {
+        "ref": "main",
+        "rev": "f20a9c11cd6b062aa6646e8b72b9767d7e90a522",
+        "type": "git",
+        "url": "https://github.com/Bullish-Design/devman"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -34,28 +54,25 @@
       }
     },
     "nixpkgs": {
-      "inputs": {
-        "nixpkgs-src": "nixpkgs-src"
-      },
       "locked": {
-        "lastModified": 1785855293,
-        "narHash": "sha256-oFTyNNuuFPL6KXd1D0w4K+IHmKIiXtCMdlnoc9vXkTk=",
-        "owner": "cachix",
-        "repo": "devenv-nixpkgs",
-        "rev": "6d5d03d1dfd5f530a098832d0f5433479b576278",
+        "lastModified": 1787135253,
+        "narHash": "sha256-RD2kNWCG+Bjo6h+JVjWVNntZs2GtRoeY2xHjts/FNkA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "ffb3c9b700e759be2ef13237c9d8f953b32a1e46",
         "type": "github"
       },
       "original": {
-        "owner": "cachix",
-        "ref": "rolling",
-        "repo": "devenv-nixpkgs",
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
         "type": "github"
       }
     },
     "nixpkgs-python": {
       "inputs": {
         "flake-compat": "flake-compat",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1784686015,
@@ -89,6 +106,25 @@
       }
     },
     "nixpkgs_2": {
+      "inputs": {
+        "nixpkgs-src": "nixpkgs-src"
+      },
+      "locked": {
+        "lastModified": 1785855293,
+        "narHash": "sha256-oFTyNNuuFPL6KXd1D0w4K+IHmKIiXtCMdlnoc9vXkTk=",
+        "owner": "cachix",
+        "repo": "devenv-nixpkgs",
+        "rev": "6d5d03d1dfd5f530a098832d0f5433479b576278",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "ref": "rolling",
+        "repo": "devenv-nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
       "locked": {
         "lastModified": 1773964973,
         "narHash": "sha256-NV/J+tTER0P5iJhUDL/8HO5MDjDceLQPRUYgdmy5wXw=",
@@ -118,7 +154,8 @@
     "root": {
       "inputs": {
         "devenv": "devenv",
-        "nixpkgs": "nixpkgs",
+        "devman": "devman",
+        "nixpkgs": "nixpkgs_2",
         "nixpkgs-python": "nixpkgs-python",
         "repoman": "repoman",
         "shellij": "shellij"
