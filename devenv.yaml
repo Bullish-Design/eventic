@@ -16,7 +16,7 @@ inputs:
   # tasks/scripts/toolchains. Dev: a local path to repoman's modules/ dir.
   # Fleet: github:Bullish-Design/repoman?dir=modules&ref=vX.Y.Z
   repoman:
-    url: path:/home/andrew/Documents/Projects/repoman/modules
+    url: "git+file:///home/andrew/Documents/Projects/repoman?dir=modules"
     flake: false
 
   # shellij: durable Zellij workbenches, installed by default (not a roster
@@ -25,7 +25,7 @@ inputs:
   # enterShell hook, and YAZI_CONFIG_HOME pointing at the packaged Yazi assets.
   # Dev: a local path to shellij's checkout. Fleet: github:Bullish-Design/shellij
   shellij:
-    url: path:/home/andrew/Documents/Projects/shellij
+    url: "git+file:///home/andrew/Documents/Projects/shellij"
     flake: false
 
   # devman: the automation plane's repo interface (CONCEPT.md §3.2). A devenv

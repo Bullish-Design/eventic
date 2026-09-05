@@ -143,12 +143,14 @@
     "repoman": {
       "flake": false,
       "locked": {
-        "path": "/home/andrew/Documents/Projects/repoman/modules",
-        "type": "path"
+        "dir": "modules",
+        "type": "git",
+        "url": "file:///home/andrew/Documents/Projects/repoman"
       },
       "original": {
-        "path": "/home/andrew/Documents/Projects/repoman/modules",
-        "type": "path"
+        "dir": "modules",
+        "type": "git",
+        "url": "file:///home/andrew/Documents/Projects/repoman"
       }
     },
     "root": {
@@ -164,12 +166,12 @@
     "shellij": {
       "flake": false,
       "locked": {
-        "path": "/home/andrew/Documents/Projects/shellij",
-        "type": "path"
+        "type": "git",
+        "url": "file:///home/andrew/Documents/Projects/shellij"
       },
       "original": {
-        "path": "/home/andrew/Documents/Projects/shellij",
-        "type": "path"
+        "type": "git",
+        "url": "file:///home/andrew/Documents/Projects/shellij"
       }
     }
   },
