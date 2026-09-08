@@ -16,8 +16,12 @@ inputs:
   # tasks/scripts/toolchains. Dev: a local path to repoman's modules/ dir.
   # Fleet: github:Bullish-Design/repoman?dir=modules&ref=vX.Y.Z
   repoman:
-    url: "git+file:///home/andrew/Documents/Projects/repoman?dir=modules"
+    url: "git+https://github.com/Bullish-Design/repoman?dir=modules&ref=refs/tags/v0.7.5"
     flake: false
+
+  vendomat:
+    url: "git+https://github.com/Bullish-Design/vendomat?ref=refs/tags/v0.3.7"
+    flake: true
 
   # shellij: durable Zellij workbenches, installed by default (not a roster
   # manager) — RepoMan presence-imports shellij's own devenv module when this
@@ -36,4 +40,5 @@ inputs:
 
 imports:
   - repoman
+  - vendomat/modules
   - devman/modules
