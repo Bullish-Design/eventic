@@ -34,25 +34,6 @@
         "type": "github"
       }
     },
-    "devman": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1789067929,
-        "narHash": "sha256-MLYTeJzk2eRAFThm2vGrkkBPdz+8cy2GGtIRrMt/OvY=",
-        "ref": "refs/tags/v0.5.1",
-        "rev": "8311f1434d6959ab0f50533cada8a451f5eab70e",
-        "revCount": 393,
-        "type": "git",
-        "url": "https://github.com/Bullish-Design/devman"
-      },
-      "original": {
-        "ref": "refs/tags/v0.5.1",
-        "type": "git",
-        "url": "https://github.com/Bullish-Design/devman"
-      }
-    },
     "docman": {
       "flake": false,
       "locked": {
@@ -104,25 +85,28 @@
       }
     },
     "nixpkgs": {
+      "inputs": {
+        "nixpkgs-src": "nixpkgs-src"
+      },
       "locked": {
-        "lastModified": 1787135253,
-        "narHash": "sha256-RD2kNWCG+Bjo6h+JVjWVNntZs2GtRoeY2xHjts/FNkA=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "ffb3c9b700e759be2ef13237c9d8f953b32a1e46",
+        "lastModified": 1787753358,
+        "narHash": "sha256-Tl77VbWyAKrOfRNQhL6JbQtb/MLzbYa/1RG1gWWfICk=",
+        "owner": "cachix",
+        "repo": "devenv-nixpkgs",
+        "rev": "256551e45f6303e142ab4a98be1bf243feb77dc0",
         "type": "github"
       },
       "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
+        "owner": "cachix",
+        "ref": "rolling",
+        "repo": "devenv-nixpkgs",
         "type": "github"
       }
     },
     "nixpkgs-python": {
       "inputs": {
         "flake-compat": "flake-compat",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
         "lastModified": 1786471740,
@@ -173,25 +157,6 @@
       }
     },
     "nixpkgs_2": {
-      "inputs": {
-        "nixpkgs-src": "nixpkgs-src"
-      },
-      "locked": {
-        "lastModified": 1787753358,
-        "narHash": "sha256-Tl77VbWyAKrOfRNQhL6JbQtb/MLzbYa/1RG1gWWfICk=",
-        "owner": "cachix",
-        "repo": "devenv-nixpkgs",
-        "rev": "256551e45f6303e142ab4a98be1bf243feb77dc0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "cachix",
-        "ref": "rolling",
-        "repo": "devenv-nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_3": {
       "locked": {
         "lastModified": 1782847189,
         "narHash": "sha256-twXPFqFsrrY5r28Zh7Homgcp2gUMBgQ6WDS98Q/3xFI=",
@@ -207,7 +172,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_4": {
+    "nixpkgs_3": {
       "inputs": {
         "nixpkgs-src": "nixpkgs-src_2"
       },
@@ -294,17 +259,18 @@
       "flake": false,
       "locked": {
         "dir": "modules",
-        "lastModified": 1788823452,
-        "narHash": "sha256-G9ke+XOt5uK6gweQca1ARnF+8WCfpiwHA9Zaal3DGYg=",
-        "ref": "refs/tags/v0.7.5",
-        "rev": "cd34bfd4845d6dde310d3a263816c86cad977a9f",
-        "revCount": 154,
+        "lastModified": 1789232939,
+        "narHash": "sha256-2WI+AhgAzpFeck+Kg8twCkqMvaOhx3FPzUAoPk4AF40=",
+        "ref": "main",
+        "rev": "57473ad47365da67d7c4ad666cfc37facf94d21c",
+        "revCount": 164,
         "type": "git",
         "url": "https://github.com/Bullish-Design/repoman"
       },
       "original": {
         "dir": "modules",
-        "ref": "refs/tags/v0.7.5",
+        "ref": "main",
+        "rev": "57473ad47365da67d7c4ad666cfc37facf94d21c",
         "type": "git",
         "url": "https://github.com/Bullish-Design/repoman"
       }
@@ -329,8 +295,7 @@
     "root": {
       "inputs": {
         "devenv": "devenv",
-        "devman": "devman",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "nixpkgs-python": "nixpkgs-python",
         "repoman": "repoman",
         "shellij": "shellij",
@@ -340,6 +305,7 @@
     "shellij": {
       "flake": false,
       "locked": {
+        "ref": "refs/heads/038-devman-migration",
         "type": "git",
         "url": "file:///home/andrew/Documents/Projects/shellij"
       },
@@ -422,7 +388,7 @@
         "copyroom": "copyroom",
         "docman": "docman",
         "gitman": "gitman",
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_3",
         "pyjutsu": "pyjutsu",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",

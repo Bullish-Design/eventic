@@ -16,7 +16,7 @@ inputs:
   # tasks/scripts/toolchains. Dev: a local path to repoman's modules/ dir.
   # Fleet: github:Bullish-Design/repoman?dir=modules&ref=vX.Y.Z
   repoman:
-    url: "git+https://github.com/Bullish-Design/repoman?dir=modules&ref=refs/tags/v0.7.5"
+    url: "git+https://github.com/Bullish-Design/repoman?dir=modules&ref=main&rev=57473ad47365da67d7c4ad666cfc37facf94d21c"
     flake: false
 
   vendomat:
@@ -32,13 +32,6 @@ inputs:
     url: "git+file:///home/andrew/Documents/Projects/shellij"
     flake: false
 
-  # devman: the automation plane's repo interface (CONCEPT.md §3.2). A devenv
-  # import is a PATH inside an input, never a flake output attribute, and the
-  # file it resolves to must be named devenv.nix.
-  devman:
-    url: "git+https://github.com/Bullish-Design/devman?ref=refs/tags/v0.5.1"
-
 imports:
   - repoman
   - vendomat/modules
-  - devman/modules

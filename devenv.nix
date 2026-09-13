@@ -7,7 +7,9 @@
 
 {
   repoman.enable = true;
+  repoman.cliProvider = "venv";
   repoman.managers = [ "copy" "git" "test" ];
+  vendor.toolchain.enable = false;
 
   # Python toolchain. The venv hosts the app + testee (the verify manager's tools
   # pytest/ruff/ty run inside this codebase, project 12); the pure-CLI managers
@@ -24,12 +26,6 @@
 
   # devman — the automation plane (CONCEPT.md §5). `base` alone: this repository
   # ships no scheduled work and writes none of its own files.
-  devman = {
-    enable = true;
-    project = "eventic";
-    groups = [ "base" ];
-  };
-
   # https://devenv.sh/tasks/
   #
   # The two task names the `base` group calls (groups/base/README.md). devenv
