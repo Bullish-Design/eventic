@@ -1,0 +1,18 @@
+# Vendomat project manifest.
+#
+# Project 039 moved these settings out of devenv.nix, which declared them
+# against the vendomat module this repository used to pin directly. The module
+# now arrives from the system profile and reads them here.
+
+[toolchain]
+# An opt-OUT. The option default is true. This repository takes the manager
+# commands from the shared venv instead of the store closure, and the matching
+# half of that decision is cliProvider = "venv" in .repoman/project.toml.
+# Deleting either line silently moves this repo onto the store toolchain.
+enable = false
+
+[vendor.publish]
+# The publish face installs a pre-push git hook whenever a vendomat.toml exists,
+# because file presence is the opt-in. This file exists only to carry the
+# toolchain opt-out above, so the hook is declined explicitly.
+enable = false

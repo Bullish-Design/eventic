@@ -1,0 +1,10 @@
+# RepoMan project manifest (schema 1).
+#
+# cliProvider = "venv" is an opt-OUT of the store toolchain, and it is the
+# matching half of `[toolchain] enable = false` in vendomat.toml. Both option
+# defaults point the other way, so deleting either line silently moves this
+# repository onto a store closure it declined.
+#
+# `managers` is omitted, so the default roster ["copy", "git", "test"] applies.
+schema = 1
+cliProvider = "venv"
