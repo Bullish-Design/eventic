@@ -20,11 +20,11 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1788819331,
-        "narHash": "sha256-PXClmncMTmWutJvFGrA6rKyvxWtUwaMUT615XrDHdB8=",
+        "lastModified": 1789480904,
+        "narHash": "sha256-anHWHTkxI7423/eUroN9Rc4+H8VIGyIUWq/hV1egBDQ=",
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "190959a9a4bb52d4802f076a90c3c4e3aa2e6fa2",
+        "rev": "0fd5e6d3a9b2ae6f10205a3e95e0ca58d526c5a6",
         "type": "github"
       },
       "original": {
@@ -89,11 +89,11 @@
         "nixpkgs-src": "nixpkgs-src"
       },
       "locked": {
-        "lastModified": 1787753358,
-        "narHash": "sha256-Tl77VbWyAKrOfRNQhL6JbQtb/MLzbYa/1RG1gWWfICk=",
+        "lastModified": 1789506231,
+        "narHash": "sha256-vNkJbtmqyBfFhn/HnzQo4ROuoyYWuy/allqTfJb4kMY=",
         "owner": "cachix",
         "repo": "devenv-nixpkgs",
-        "rev": "256551e45f6303e142ab4a98be1bf243feb77dc0",
+        "rev": "c2f38fe7f9e04d9aadd354d380f2bd40531d9737",
         "type": "github"
       },
       "original": {
@@ -125,11 +125,11 @@
     "nixpkgs-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1787394516,
-        "narHash": "sha256-pRGOQSClnXNI2iLUG6DYpsGvYcuw0drOutVZFTJNw90=",
+        "lastModified": 1789370336,
+        "narHash": "sha256-6RSEDHIWQtesQKWSu5qRai8L2h4KgCgMEfJHstW99G4=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "c8f90650c15282fa8656a041bfbbd2403997a9a7",
+        "rev": "c7def046b9a883d46974757852106483d741586f",
         "type": "github"
       },
       "original": {
@@ -258,26 +258,6 @@
     "repoman": {
       "flake": false,
       "locked": {
-        "dir": "modules",
-        "lastModified": 1789232939,
-        "narHash": "sha256-2WI+AhgAzpFeck+Kg8twCkqMvaOhx3FPzUAoPk4AF40=",
-        "ref": "main",
-        "rev": "57473ad47365da67d7c4ad666cfc37facf94d21c",
-        "revCount": 164,
-        "type": "git",
-        "url": "https://github.com/Bullish-Design/repoman"
-      },
-      "original": {
-        "dir": "modules",
-        "ref": "main",
-        "rev": "57473ad47365da67d7c4ad666cfc37facf94d21c",
-        "type": "git",
-        "url": "https://github.com/Bullish-Design/repoman"
-      }
-    },
-    "repoman_2": {
-      "flake": false,
-      "locked": {
         "lastModified": 1788823452,
         "narHash": "sha256-G9ke+XOt5uK6gweQca1ARnF+8WCfpiwHA9Zaal3DGYg=",
         "ref": "refs/tags/v0.7.5",
@@ -297,7 +277,6 @@
         "devenv": "devenv",
         "nixpkgs": "nixpkgs",
         "nixpkgs-python": "nixpkgs-python",
-        "repoman": "repoman",
         "shellij": "shellij",
         "vendomat": "vendomat"
       }
@@ -305,7 +284,6 @@
     "shellij": {
       "flake": false,
       "locked": {
-        "ref": "refs/heads/038-devman-migration",
         "type": "git",
         "url": "file:///home/andrew/Documents/Projects/shellij"
       },
@@ -392,7 +370,7 @@
         "pyjutsu": "pyjutsu",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
-        "repoman": "repoman_2",
+        "repoman": "repoman",
         "templateer": "templateer",
         "uv2nix": "uv2nix_2"
       },

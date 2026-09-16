@@ -12,13 +12,6 @@ inputs:
   nixpkgs-python:
     url: github:cachix/nixpkgs-python
 
-  # RepoMan meta-module: one import wires in the selected *man managers and their
-  # tasks/scripts/toolchains. Dev: a local path to repoman's modules/ dir.
-  # Fleet: github:Bullish-Design/repoman?dir=modules&ref=vX.Y.Z
-  repoman:
-    url: "git+https://github.com/Bullish-Design/repoman?dir=modules&ref=main&rev=57473ad47365da67d7c4ad666cfc37facf94d21c"
-    flake: false
-
   vendomat:
     url: "git+https://github.com/Bullish-Design/vendomat?ref=refs/tags/v0.3.7"
     flake: true
@@ -33,5 +26,4 @@ inputs:
     flake: false
 
 imports:
-  - repoman
   - vendomat/modules

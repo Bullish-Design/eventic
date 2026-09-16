@@ -6,9 +6,7 @@
 { ... }:
 
 {
-  repoman.enable = true;
   repoman.cliProvider = "venv";
-  repoman.managers = [ "copy" "git" "test" ];
   vendor.toolchain.enable = false;
 
   # Python toolchain. The venv hosts the app + testee (the verify manager's tools
