@@ -12,11 +12,3 @@ inputs:
   nixpkgs-python:
     url: github:cachix/nixpkgs-python
 
-  # shellij: durable Zellij workbenches, installed by default (not a roster
-  # manager) — RepoMan presence-imports shellij's own devenv module when this
-  # input is declared: shellij/zellij/yazi packages, the guarded `shellij open`
-  # enterShell hook, and YAZI_CONFIG_HOME pointing at the packaged Yazi assets.
-  # Dev: a local path to shellij's checkout. Fleet: github:Bullish-Design/shellij
-  shellij:
-    url: "git+file:///home/andrew/Documents/Projects/shellij"
-    flake: false
