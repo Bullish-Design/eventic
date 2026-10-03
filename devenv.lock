@@ -108,19 +108,7 @@
       "inputs": {
         "devenv": "devenv",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-python": "nixpkgs-python",
-        "shellij": "shellij"
-      }
-    },
-    "shellij": {
-      "flake": false,
-      "locked": {
-        "type": "git",
-        "url": "file:///home/andrew/Documents/Projects/shellij"
-      },
-      "original": {
-        "type": "git",
-        "url": "file:///home/andrew/Documents/Projects/shellij"
+        "nixpkgs-python": "nixpkgs-python"
       }
     }
   },
