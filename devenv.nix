@@ -1,15 +1,15 @@
-# eventic — repoman-enabled Python devenv.
+# eventic — RepoMan-managed Python devenv.
 #
-# RepoMan is always on. This Python template is a superset of template-nix: it adds
-# a Python toolchain to the language-agnostic core (copy + git). This repo does
-# not declare Testee checks; the `eventic:*` tasks below run pytest and ruff.
+# `.repoman/project.toml` owns the lifecycle manager roster. The roster here is
+# `copy` and `git`. This repo does not declare Testee, so `test` is not on the
+# roster. The central Devman link plane imports the RepoMan module through the
+# machine-local `devenv.local.nix`. The `eventic:*` tasks below run ruff and
+# pytest. The host profile puts the managers (copyroom, gitman, docman) on PATH.
 { ... }:
 
 {
-
   # Python toolchain. The venv hosts the app and its `test` extra (pytest,
-  # ruff, basedpyright); the pure-CLI managers (copyroom/gitman) come from the
-  # system-wide toolchain venv (`repoman-sync --machine`) instead.
+  # ruff, basedpyright). Run `uv sync --extra test` once to fill it.
   languages.python = {
     enable = true;
     # Matches pyproject requires-python and the CI matrix leg. Resolves only

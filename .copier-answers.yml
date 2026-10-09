@@ -1,11 +1,15 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v0.1.8
+_commit: v0.5.0
 _src_path: /home/andrew/Documents/Projects/template-py
 author_email: BullishDesignEngineering@gmail.com
 author_name: Bullish Design
 description: A versioned document store with transactional change notification.
+docman_ref: v0.2.1
+managers:
+- copy
+- git
 package_name: eventic
 project_name: eventic
 project_version: 1.0.0
-repoman_dev_root: /home/andrew/Documents/Projects
+repoman_ref: v0.12.0
 

@@ -1,6 +1,11 @@
 # yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
 #
 # eventic — a repoman-managed Python devenv repo.
+#
+# This file declares no `repoman` input and no `imports`. The central Devman link
+# plane (`devenv.local.nix`, machine-local) imports the RepoMan module. A second
+# import from here fails with "option `repoman.enable' is already declared".
+# The roster lives in `.repoman/project.toml`.
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling

@@ -1,9 +1,2 @@
-# RepoMan project manifest (schema 1).
-#
-# Recognised fields are `schema` and `managers` only. `cliProvider` was removed
-# with project 12: the roster now selects which manager tasks are WIRED, and
-# every manager command comes from the shared Vendomat store closure
-# ($REPOMAN_TOOLCHAIN_BIN), delivered by the vendomat consumer module.
-#
-# `managers` is omitted, so the default roster ["copy", "git", "test"] applies.
 schema = 1
+managers = ["copy", "git"]

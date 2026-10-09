@@ -17,7 +17,7 @@ git:
 context:
   docs: [README.md]
   source: [src/, tests/]
-  config: [pyproject.toml, .copier-answers.yml]
+  config: [pyproject.toml, .copier-answers.yml, .repoman/project.toml, .devman/project.toml]
 
 devenv:
   enabled: true
@@ -34,14 +34,18 @@ agent:
   overlay: []
 
 commands:
-  # Birth (runs only with `copyroom new --trust`): pull the pinned manager
-  # toolchain into the venv, put the repo under gitman (jj + colocated git),
-  # and seed trunk's first commit from the rendered files.
+  # Birth (runs only with `copyroom new --trust`): verify the RepoMan wiring,
+  # fill the venv (this writes uv.lock), put the repo under native jj
+  # (colocated with git), and seed trunk's first commit from the rendered files.
+  # gitman 0.12 has one verb, `gitman work`, so jj does the rest. `jj` comes
+  # from the host profile. There is no publish lane: run the `eventic:lint` and
+  # `eventic:test` tasks before you push.
   post_project_create:
     - "devenv shell -- repoman-sync"
-    # put the repo under gitman (jj + colocated git — gitman bootstraps the git
-    # itself), then seed trunk's first commit from the rendered files.
-    - "devenv shell -- gitman init --colocate --trunk main"
-    - "devenv shell -- gitman seed -m 'Initial generation'"
+    - "devenv shell -- uv sync --all-extras"
+    - "jj git init --colocate"
+    - "jj describe -m 'Initial generation'"
+    - "jj bookmark create main -r @"
+    - "jj new"
   check:
     - "devenv shell -- repoman doctor"

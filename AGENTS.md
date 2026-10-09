@@ -7,40 +7,44 @@ tool reads the same source.
 
 ## How to work here
 
-- **Run everything inside the `devenv` shell** — it pins Python and wires the `*man`
-  toolchain (copyroom, gitman, testee, docman, repoman). Never invoke bare
-  `uv`/`python`/`pytest`/`git`/`copier`.
-- **The lifecycle is RepoMan's.** Scaffold/update → change → verify → save →
-  docs. For the order and the routing, start at the `repoman` skill; for domain
-  detail open the per-tool skills.
-- **Exit codes are an API:** `0` ok · `1` finding · `2` infra/config · `3` usage.
-- **Verify before you save:** `devenv shell -- repoman doctor` (or the repo's
-  `check`), then commit via gitman.
+- **Run project commands inside the `devenv` shell.** It pins Python and wires RepoMan.
+  Never invoke bare `uv`/`python`/`pytest`/`copier`. The host profile puts the `*man`
+  commands (copyroom, gitman, docman, repoman) on `PATH`.
+- **The lifecycle is RepoMan's.** Change → verify → integrate. Birth/converge (copyroom)
+  and docs (docman) are activities with no fixed order. For the order and the routing,
+  start at the `repoman` skill; for domain detail open the per-tool skills.
+- **Exit codes are an API:** `0` ok · `1` act on findings · `2` the tool could not run.
+- **This repo does not declare Testee.** The `eventic:lint` and `eventic:test` tasks in
+  `devenv.nix` run the checks. Run them with `devenv tasks run --no-tui eventic:lint`
+  and `devenv tasks run --no-tui eventic:test`. Use `--no-tui` with every devenv command
+  that can open the full-screen interface.
+- **Verify before you integrate:** run both tasks. Then use native `jj`:
+  `jj describe -m "message"`, `jj new`, `jj bookmark create NAME -r @-`,
+  `jj git push --bookmark NAME`, and `gh pr create`. Native `jj git push` runs no hook, so
+  run the checks yourself. Never push on red.
+- **Gitman only opens workspaces:** `gitman work NAME`. Native `jj` and `gh` do the rest.
+- **Checks are tasks in `devenv.nix`.** To add or change a check, edit that file. Do not
+  add Testee wiring, a separate Testee config file, or a `[tool.testee]` table.
 
 ## Where things live
 
 - `src/` — the Python package; `tests/` — its tests.
-- `devenv.nix` / `devenv.yaml` — the reproducible shell.
+- `devenv.nix` / `devenv.yaml` — the reproducible shell and the `eventic:*` tasks.
 - `pyproject.toml` — declares the `test` extra (pytest, hypothesis, coverage,
   basedpyright, ruff). This repo does not declare Testee; the `eventic:lint`
-  and `eventic:test` tasks in `devenv.nix` run the checks. The pure-CLI managers
-  come from the system-wide toolchain venv (`repoman-sync --machine`) — there
-  is no per-repo `repoman.lock` anymore.
+  and `eventic:test` tasks in `devenv.nix` run the checks. The host profile puts
+  the managers on `PATH`. There is no per-repo `repoman.lock` and no Vendomat
+  closure.
 - `copyroom.project.yml` — advisory project metadata (template id, hooks,
   the `agent:` section).
-- `.agents/skills/` — this repo's skills (see below); `.agents/devenv/` — the
-  devenv-literacy docs export.
+- `.repoman/project.toml` — the lifecycle manager roster (`copy`, `git`; no `test`
+  because this repo has no Testee); `.agents/` and `.claude/` — machine-local links
+  maintained by the central Devman link plane.
 
 ## Agent-files convention
 
-- **Skills** live at `.agents/skills/<name>/SKILL.md` — imperative + short, and
-  they link to the docs rather than repeat them.
-- **Ownership:** the canonical copyroom skills (`copyroom`, `copyroom-adopt`,
-  `copyroom-template-edit`) are tool-shipped — materialized by
-  `copyroom agent-files export`, one source of truth in the package. The
-  `devenv-*` skills and `.agents/devenv/` docs are genome-shipped — converged by
-  `copyroom update`. Anything else here is this repo's overlay.
-- **Permanently diverging on a skill?** Declare it in `copyroom.project.yml`
-  `agent.overlay` so updates leave it alone.
-- `.agents/` is dual-use: the convention files are tracked; tool runtime state
-  (e.g. `.agents/pi/`) stays gitignored.
+- **Skills** are supplied by the central Devman link plane at
+  `.agents/skills/<name>/SKILL.md`; do not commit or materialize a second copy
+  in this project.
+- **Ownership:** `AGENTS.md` is canonical and `CLAUDE.md` is its symlink. The
+  `.agents/` and `.claude/` links are machine-local and stay gitignored.
