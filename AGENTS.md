@@ -21,9 +21,11 @@ tool reads the same source.
 
 - `src/` — the Python package; `tests/` — its tests.
 - `devenv.nix` / `devenv.yaml` — the reproducible shell.
-- `pyproject.toml` — declares `testee` (the verify manager) as a uv dev
-  dependency; the pure-CLI managers come from the system-wide toolchain venv
-  (`repoman-sync --machine`) — there is no per-repo `repoman.lock` anymore.
+- `pyproject.toml` — declares the `test` extra (pytest, hypothesis, coverage,
+  basedpyright, ruff). This repo does not declare Testee; the `eventic:lint`
+  and `eventic:test` tasks in `devenv.nix` run the checks. The pure-CLI managers
+  come from the system-wide toolchain venv (`repoman-sync --machine`) — there
+  is no per-repo `repoman.lock` anymore.
 - `copyroom.project.yml` — advisory project metadata (template id, hooks,
   the `agent:` section).
 - `.agents/skills/` — this repo's skills (see below); `.agents/devenv/` — the
