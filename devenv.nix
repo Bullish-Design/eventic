@@ -6,10 +6,6 @@
 { ... }:
 
 {
-  # Project 039: the store-toolchain opt-out moved to the tracked manifests --
-  # `cliProvider = "venv"` in .repoman/project.toml, and `[toolchain] enable =
-  # false` in vendomat.toml. Both modules now reach this repository from the
-  # system profile, so neither option belongs to an input declared here.
 
   # Python toolchain. The venv hosts the app + testee (the verify manager's tools
   # pytest/ruff/ty run inside this codebase, project 12); the pure-CLI managers
