@@ -104,11 +104,31 @@
         "type": "github"
       }
     },
+    "repoman": {
+      "flake": false,
+      "locked": {
+        "dir": "modules",
+        "lastModified": 1791599629,
+        "narHash": "sha256-Ti8i6c8e8VCFm853kHBNjmS+e+p0Sa4P3zIGoDwdcbg=",
+        "ref": "refs/tags/v0.12.1",
+        "rev": "3f3df9b195a2d1c9d3c99fe86890ce0f93c462dc",
+        "revCount": 226,
+        "type": "git",
+        "url": "https://github.com/Bullish-Design/repoman"
+      },
+      "original": {
+        "dir": "modules",
+        "ref": "refs/tags/v0.12.1",
+        "type": "git",
+        "url": "https://github.com/Bullish-Design/repoman"
+      }
+    },
     "root": {
       "inputs": {
         "devenv": "devenv",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-python": "nixpkgs-python"
+        "nixpkgs-python": "nixpkgs-python",
+        "repoman": "repoman"
       }
     }
   },

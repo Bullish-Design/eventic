@@ -2,12 +2,15 @@
 #
 # `.repoman/project.toml` owns the lifecycle manager roster. The roster here is
 # `copy` and `git`. This repo does not declare Testee, so `test` is not on the
-# roster. The central Devman link plane imports the RepoMan module through the
-# machine-local `devenv.local.nix`. The `eventic:*` tasks below run ruff and
-# pytest. The host profile puts the managers (copyroom, gitman, docman) on PATH.
+# roster. This repo declares the RepoMan input in `devenv.yaml`. The
+# machine-local `devenv.local.nix` imports only the Devman link module. The
+# `eventic:*` tasks below run ruff and pytest. The host profile puts the
+# managers (copyroom, gitman, docman) on PATH.
 { ... }:
 
 {
+  repoman.enable = true;
+
   # Python toolchain. The venv hosts the app and its `test` extra (pytest,
   # ruff, basedpyright). Run `uv sync --extra test` once to fill it.
   languages.python = {
