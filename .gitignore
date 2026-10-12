@@ -1,0 +1,36 @@
+# devenv
+.devenv/
+.devenv.flake.nix
+devenv.local.nix
+
+# direnv
+.direnv/
+
+# python build / venv / caches
+.venv/
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Testee verification artifacts
+.testee/
+
+# copyroom scratch (template-edit previews/worktrees)
+.copyroom/
+
+# Agent-files convention (see AGENTS.md): the central Devman link plane owns
+# .agents/ and .claude/; neither directory is tracked in this project.
+!AGENTS.md
+!CLAUDE.md
+.agents/
+.claude/
+
+# The machine-local devenv input overlay. devenv.yaml is committed in its portable
+# FLEET shape (published tags); this file points the same inputs at THIS machine's
+# working trees.
+devenv.local.yaml

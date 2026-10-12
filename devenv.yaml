@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
+#
+# eventic — a repoman-managed Python devenv repo.
+#
+# This file is committed in the FLEET shape: every first-party input names a
+# published tag, so a fresh clone and CI both evaluate it with no sibling
+# checkouts. `git+https://` and not the `github:` shorthand: several of these
+# repos are private, and only the git fetcher uses your git credential helper.
+# To develop a *man tool from a local working tree, edit the
+# untracked `devenv.local.yaml` beside this file — devenv merges it over this
+# one. The committed file says WHAT; the local overlay says WHERE.
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+
+  # RepoMan meta-module: one import wires in the selected *man managers and their
+  # tasks and scripts. The host profile puts copyroom, gitman, docman, and testee
+  # on PATH, so this file declares no input that provides manager commands.
+  repoman:
+    url: "git+https://github.com/Bullish-Design/repoman?dir=modules&ref=refs/tags/v0.12.0"
+    flake: false
+
+imports:
+  - repoman

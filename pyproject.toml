@@ -1,0 +1,54 @@
+[project]
+name = "eventic"
+version = "1.0.0"
+description = "A versioned document store with transactional change notification."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+
+authors = [
+  { name = "Bullish Design", email = "BullishDesignEngineering@gmail.com" },
+]
+
+dependencies = [
+  "pydantic>=2",
+]
+
+# The dev group declares the check tools (pytest, ruff, ty) directly: Testee 0.5
+# carries none of them. Testee's Nix module in devenv.nix runs the checks. The
+# `testee` entry below pins the same tag as that module.
+# Docman's Python tools also live in this graph so a normal `uv sync` preserves
+# both verification and documentation commands.
+# The host profile puts the managers (copyroom, gitman, docman) on PATH.
+[dependency-groups]
+dev = [
+  "testee",
+  "pytest",
+  "ruff",
+  "ty",
+
+]
+
+[tool.uv.sources]
+# Fleet shape: a published tag, so a fresh clone resolves it. Keep this tag equal
+# to the tag in devenv.nix.
+testee = { git = "https://github.com/Bullish-Design/testee", tag = "v0.5.0" }
+
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eventic"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
