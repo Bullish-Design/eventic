@@ -14,25 +14,17 @@ dependencies = [
   "pydantic>=2",
 ]
 
-# The dev group declares the check tools (pytest, ruff, ty) directly: Testee 0.5
-# carries none of them. Testee's Nix module in devenv.nix runs the checks. The
-# `testee` entry below pins the same tag as that module.
-# Docman's Python tools also live in this graph so a normal `uv sync` preserves
-# both verification and documentation commands.
-# The host profile puts the managers (copyroom, gitman, docman) on PATH.
+# The dev group declares the check tools (pytest, ruff, ty) directly: Testee
+# carries none of them. Testee is a host-profile command, not a dependency of
+# this project. `testee.prepare` in devenv.nix runs `uv sync --locked`, so keep
+# `uv.lock` in Git. Testee's Nix module in devenv.nix declares the checks.
+# The host profile puts the managers (copyroom, gitman) and `testee` on PATH.
 [dependency-groups]
 dev = [
-  "testee",
   "pytest",
   "ruff",
   "ty",
-
 ]
-
-[tool.uv.sources]
-# Fleet shape: a published tag, so a fresh clone resolves it. Keep this tag equal
-# to the tag in devenv.nix.
-testee = { git = "https://github.com/Bullish-Design/testee", tag = "v0.5.0" }
 
 [build-system]
 requires = ["hatchling>=1.18"]

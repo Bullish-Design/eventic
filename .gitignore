@@ -17,18 +17,18 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# Testee verification artifacts
+# Legacy Testee 0.5 state. Testee 0.6 keeps its state outside the project.
+# Keep this line until every checkout has deleted its old `.testee/`.
 .testee/
 
-# copyroom scratch (template-edit previews/worktrees)
-.copyroom/
-
 # Agent-files convention (see AGENTS.md): the central Devman link plane owns
-# .agents/ and .claude/; neither directory is tracked in this project.
+# .agents and .claude. Both are symlinks, and neither is tracked in this project.
+# Write the names with no trailing slash: a trailing slash matches only a real
+# directory, not a symlink.
 !AGENTS.md
 !CLAUDE.md
-.agents/
-.claude/
+.agents
+.claude
 
 # The machine-local devenv input overlay. devenv.yaml is committed in its portable
 # FLEET shape (published tags); this file points the same inputs at THIS machine's
