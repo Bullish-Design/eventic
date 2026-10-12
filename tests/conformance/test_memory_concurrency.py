@@ -38,9 +38,7 @@ def test_concurrent_creates_on_memory_store_lose_nothing() -> None:
                 except Exception as e:  # noqa: BLE001 - collect, don't fail the thread
                     errors.append(e)
 
-        threads = [
-            threading.Thread(target=worker, args=(f"t{t}",)) for t in range(4)
-        ]
+        threads = [threading.Thread(target=worker, args=(f"t{t}",)) for t in range(4)]
         for t in threads:
             t.start()
         for t in threads:

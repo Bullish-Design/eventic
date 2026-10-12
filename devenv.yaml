@@ -1,6 +1,15 @@
 # yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
 #
 # eventic — a repoman-managed Python devenv repo.
+#
+# This file is committed in the FLEET shape: every first-party input names a
+# published tag, so a fresh clone and CI both evaluate it with no sibling
+# checkouts. `git+https://` and not the `github:` shorthand: several of these
+# repos are private, and only the git fetcher uses your git credential helper.
+# To develop a *man tool from a local working tree, create an untracked
+# `devenv.local.yaml` beside this file. devenv merges it over this one. The
+# committed file says WHAT; the local overlay says WHERE. The README shows an
+# example.
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
@@ -13,14 +22,22 @@ inputs:
     url: github:cachix/nixpkgs-python
 
   # RepoMan meta-module: one import wires in the selected *man managers and their
-  # tasks and scripts. The host profile puts copyroom, gitman, docman, and testee
+  # tasks and scripts. The host profile puts copyroom, gitman, and testee
   # on PATH, so this file declares no input that provides manager commands.
-  # The central Devman overlay imports only the Devman link module. It must not
-  # import the RepoMan module: devenv fails with "option repoman.enable is
-  # already declared". The roster lives in `.repoman/project.toml`.
+  # Declare this input only if the central Devman overlay does not import the
+  # RepoMan module. If the overlay already imports it, remove this input and the
+  # `repoman` import below: devenv fails with "option repoman.enable is already
+  # declared". The overlay should import only the Devman link module.
   repoman:
     url: "git+https://github.com/Bullish-Design/repoman?dir=modules&ref=refs/tags/v0.12.1"
     flake: false
 
+  # Testee module: declares `testee.checks`. `devenv.lock` pins its revision.
+  # Move the pin with `devenv update testee`, then commit `devenv.lock`.
+  testee:
+    url: "git+https://github.com/Bullish-Design/testee?ref=refs/tags/v0.6.1"
+    flake: false
+
 imports:
   - repoman
+  - testee/nix/testee.nix

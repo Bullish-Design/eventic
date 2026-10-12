@@ -47,13 +47,13 @@ dbos-config.yaml
 # Scratch / working notes (review artifacts versioned in e76d0a1)
 
 # Agent-files convention (see AGENTS.md): the central Devman link plane owns
-# .agents/ and .claude/; neither is tracked in this project. `.agents` has no
-# trailing slash on purpose: it is a symlink, and git matches a symlink only
-# without the slash.
+# .agents and .claude. Both are symlinks, and neither is tracked in this project.
+# Write the names with no trailing slash: a trailing slash matches only a real
+# directory, not a symlink.
 !AGENTS.md
 !CLAUDE.md
 .agents
-.claude/
+.claude
 
 # The machine-local devenv input overlay. devenv.yaml is committed in its portable
 # FLEET shape (published tags); this file points the same inputs at THIS machine's

@@ -1,12 +1,13 @@
 # eventic — RepoMan-managed Python devenv.
 #
-# `.repoman/project.toml` owns the lifecycle manager roster. The roster here is
-# `copy` and `git`. This repo does not declare Testee, so `test` is not on the
-# roster. This repo declares the RepoMan input in `devenv.yaml`. The
-# machine-local `devenv.local.nix` imports only the Devman link module. The
-# `eventic:*` tasks below run ruff and pytest. The host profile puts the
-# managers (copyroom, gitman, docman) on PATH.
-{ ... }:
+# `.repoman/project.toml` owns the lifecycle manager roster. Testee checks each
+# commit in its own workspace and keeps one verdict per check. `devenv.yaml`
+# loads the Testee module from a locked input: `devenv.lock` pins its revision.
+# The host `testee` command runs the checks declared below. Before the checks,
+# Testee runs `testee.prepare` in the workspace, so the venv follows `uv.lock`.
+# The check tools (pytest, ruff, ty) come from the `dev` dependency group in
+# pyproject.toml.
+{ pkgs, ... }:
 
 {
   repoman.enable = true;
@@ -22,19 +23,47 @@
     uv.enable = true;
   };
 
-  # devman — the automation plane (CONCEPT.md §5). `base` alone: this repository
-  # ships no scheduled work and writes none of its own files.
-  # https://devenv.sh/tasks/
-  #
-  # The two task names the `base` group calls (groups/base/README.md). devenv
-  # owns each implementation; Dagu owns the composition (§6). pytest and ruff
-  # live in the `test` extra (not `dev`), so the flag is `--extra test`
-  # (STAGE_7_LOG.md, wave 2b). `ruff check src` matches the repo's own scope.
+  # Match .github/workflows/ci.yml: install the same extras and build the wheel.
+  # Keep both lock files in Git. Checks run through uv run --no-sync.
+  testee.prepare = [
+    [ "uv" "sync" "--locked" "--extra" "test" "--extra" "postgres" "--extra" "migrate" ]
+    [ "uv" "build" ]
+  ];
+  testee.checks = {
+    ruff = {
+      argv = [ "uv" "run" "--no-sync" "ruff" "check" "--output-format" "json" "." ];
+      profiles = [ "quick" "full" ];
+      structured = { parser = "ruff-json"; file = "ruff.stdout.log"; };
+    };
+    ruff-format = {
+      argv = [ "uv" "run" "--no-sync" "ruff" "format" "--check" "." ];
+      profiles = [ "quick" "full" ];
+    };
+    basedpyright = {
+      argv = [ "uv" "run" "--no-sync" "basedpyright" ];
+      profiles = [ "full" ];
+    };
+    pytest = {
+      argv = [
+        "${pkgs.bash}/bin/bash" "-c"
+        ''uv run --no-sync pytest -W error --junitxml="$TESTEE_RUN_DIR/pytest.junit.xml"''
+      ];
+      profiles = [ "full" ];
+      structured = { parser = "junit-xml"; file = "pytest.junit.xml"; };
+    };
+  };
   tasks = {
     "eventic:lint".exec = "uv run --extra test ruff check src";
     "eventic:test".exec = "uv run --extra test pytest";
 
-    "base:check".after = [ "eventic:lint" ];
-    "base:test".after = [ "eventic:test" ];
+    # Stable Devman base-group entrypoints. The full gate uses Testee verdicts.
+    "base:check".exec = ''
+      cd "$DEVENV_ROOT"
+      testee verify ruff ruff-format
+    '';
+    "base:test".exec = ''
+      cd "$DEVENV_ROOT"
+      testee verify
+    '';
   };
 }
