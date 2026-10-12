@@ -49,8 +49,9 @@ symlink to it, so every agent tool reads the same source.
 
 ## Staying current
 
-- **Template updates:** run `copyroom update`. It previews a three-way merge from the
-  template source in a separate workspace. Review the preview, then run
+- **Template updates:** the project stays on its pinned template ref. Run `copyroom status`
+  to see the pin and the newer version tags. Run `copyroom update --ref NEW_REF` to preview a
+  three-way merge in a separate workspace. Review the preview, then run
   `copyroom update --apply PATH`.
 - **One RepoMan import only:** if the central Devman overlay already imports the RepoMan
   module, do not also declare the `repoman` input in `devenv.yaml`. devenv fails with

@@ -79,11 +79,12 @@ run `devenv update` before you commit.
 
 ## Staying current with the template
 
-This project was created from the `template-py` source. CopyRoom saves a snapshot of that
-source in `.copyroom-local/`. Pull template updates with:
+This project follows the `template-py` source at a pinned ref. CopyRoom keeps the saved
+source in a private Git ref, not in the working tree. Run `copyroom status` to see the pin and
+the newer version tags. The project stays on its pin until you move it:
 
 ```bash
-copyroom update                 # preview a three-way merge in a separate workspace
+copyroom update --ref NEW_REF   # preview a three-way merge in a separate workspace
 copyroom update --apply PATH    # apply the preview that you reviewed
 ```
 
