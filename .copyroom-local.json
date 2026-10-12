@@ -54,12 +54,12 @@
       "pin": {
         "commit": "851a7112f21e6980797f5db6b39219c90241fbc4",
         "ref": "v0.8.0",
-        "repo": "/tmp/eventic-gate-FMgCga/template-py",
+        "repo": "/home/andrew/Documents/Projects/template-py",
         "subdir": "source"
       },
       "render_digest": "2ebdc6ee77765a1cc8cbfb8b3999748462fe39991aee5d891f25e3f19fa2e0a6",
-      "revision": 1,
-      "source": "/tmp/eventic-gate-FMgCga/template-py/source",
+      "revision": 2,
+      "source": "/home/andrew/Documents/Projects/template-py/source",
       "source_digest": "9e250d75c267ada2733c4ef0509ab85a89bc97e071516e3012696ae2a7b249af",
       "templateer_digest": "286c87491394aab4eca7f82e66bf4560ceee464eea82ed763dd246b51bb8c881",
       "templateer_version": "0.6.0"
@@ -84,14 +84,14 @@
   "pin": {
     "commit": "851a7112f21e6980797f5db6b39219c90241fbc4",
     "ref": "v0.8.0",
-    "repo": "/tmp/eventic-gate-FMgCga/template-py",
+    "repo": "/home/andrew/Documents/Projects/template-py",
     "subdir": "source"
   },
   "project_id": "ee25717485934013928321b94ead5436",
   "render_digest": "2ebdc6ee77765a1cc8cbfb8b3999748462fe39991aee5d891f25e3f19fa2e0a6",
-  "revision": 1,
+  "revision": 2,
   "schema": 2,
-  "source": "/tmp/eventic-gate-FMgCga/template-py/source",
+  "source": "/home/andrew/Documents/Projects/template-py/source",
   "source_digest": "9e250d75c267ada2733c4ef0509ab85a89bc97e071516e3012696ae2a7b249af",
   "templateer_digest": "286c87491394aab4eca7f82e66bf4560ceee464eea82ed763dd246b51bb8c881",
   "templateer_version": "0.6.0"
