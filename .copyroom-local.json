@@ -52,15 +52,15 @@
         "src/eventic/__init__.py": "package_init"
       },
       "pin": {
-        "commit": "851a7112f21e6980797f5db6b39219c90241fbc4",
-        "ref": "v0.8.0",
+        "commit": "cf2ec939f8f12b194d342d9e874ea8b8d2f759c6",
+        "ref": "v0.8.1",
         "repo": "/home/andrew/Documents/Projects/template-py",
         "subdir": "source"
       },
-      "render_digest": "2ebdc6ee77765a1cc8cbfb8b3999748462fe39991aee5d891f25e3f19fa2e0a6",
-      "revision": 2,
+      "render_digest": "252e04d06116cfa64f5e8fd9c734e33348b768aad25a890ba710ea670e1a3749",
+      "revision": 3,
       "source": "/home/andrew/Documents/Projects/template-py/source",
-      "source_digest": "9e250d75c267ada2733c4ef0509ab85a89bc97e071516e3012696ae2a7b249af",
+      "source_digest": "8f77e06130bc6731516e6f7dbcb8410b1f9e6c0a1dfe239ef42a868d965fa975",
       "templateer_digest": "286c87491394aab4eca7f82e66bf4560ceee464eea82ed763dd246b51bb8c881",
       "templateer_version": "0.6.0"
     }
@@ -82,17 +82,17 @@
     "src/eventic/__init__.py": "package_init"
   },
   "pin": {
-    "commit": "851a7112f21e6980797f5db6b39219c90241fbc4",
-    "ref": "v0.8.0",
+    "commit": "cf2ec939f8f12b194d342d9e874ea8b8d2f759c6",
+    "ref": "v0.8.1",
     "repo": "/home/andrew/Documents/Projects/template-py",
     "subdir": "source"
   },
   "project_id": "ee25717485934013928321b94ead5436",
-  "render_digest": "2ebdc6ee77765a1cc8cbfb8b3999748462fe39991aee5d891f25e3f19fa2e0a6",
-  "revision": 2,
+  "render_digest": "252e04d06116cfa64f5e8fd9c734e33348b768aad25a890ba710ea670e1a3749",
+  "revision": 3,
   "schema": 2,
   "source": "/home/andrew/Documents/Projects/template-py/source",
-  "source_digest": "9e250d75c267ada2733c4ef0509ab85a89bc97e071516e3012696ae2a7b249af",
+  "source_digest": "8f77e06130bc6731516e6f7dbcb8410b1f9e6c0a1dfe239ef42a868d965fa975",
   "templateer_digest": "286c87491394aab4eca7f82e66bf4560ceee464eea82ed763dd246b51bb8c881",
   "templateer_version": "0.6.0"
 }
