@@ -1,0 +1,90 @@
+{
+  "answers": {
+    "author_email": "BullishDesignEngineering@gmail.com",
+    "author_name": "Bullish Design",
+    "description": "A versioned document store with transactional change notification.",
+    "docman_ref": "v0.2.1",
+    "managers": [
+      "copy",
+      "git"
+    ],
+    "package_name": "eventic",
+    "project_name": "eventic",
+    "project_version": "1.0.0",
+    "repoman_dev_root": "/home/andrew/Documents/Projects",
+    "repoman_ref": "v0.12.0",
+    "test_file": "test_eventic.py",
+    "testee_ref": "v0.5.0"
+  },
+  "composer_digest": "bff36234f8e9eb7ca17996861b6cf7c73d7405bc5c742885561bbede1f274cd7",
+  "layers": {
+    "base": {
+      "answers": {
+        "author_email": "BullishDesignEngineering@gmail.com",
+        "author_name": "Bullish Design",
+        "description": "A versioned document store with transactional change notification.",
+        "docman_ref": "v0.2.1",
+        "managers": [
+          "copy",
+          "git"
+        ],
+        "package_name": "eventic",
+        "project_name": "eventic",
+        "project_version": "1.0.0",
+        "repoman_dev_root": "/home/andrew/Documents/Projects",
+        "repoman_ref": "v0.12.0",
+        "test_file": "test_eventic.py",
+        "testee_ref": "v0.5.0"
+      },
+      "composer_digest": "bff36234f8e9eb7ca17996861b6cf7c73d7405bc5c742885561bbede1f274cd7",
+      "manifest_digest": "1573d8e01b25e55ef3daed97643d07638e107ba87b374bca64724ae56aeb647c",
+      "omissions": [
+        "tests/test_eventic.py"
+      ],
+      "owners": {
+        ".devman/project.toml": "devman_project_toml",
+        ".gitignore": "static:static/dot-gitignore",
+        ".repoman/project.toml": "repoman_project_toml",
+        "AGENTS.md": "static:static/AGENTS.md",
+        "CLAUDE.md": "symlink:AGENTS.md",
+        "README.md": "readme_md",
+        "copyroom.project.yml": "copyroom_project_yml",
+        "devenv.nix": "devenv_nix",
+        "devenv.yaml": "devenv_yaml",
+        "pyproject.toml": "pyproject_toml",
+        "src/eventic/__init__.py": "src_package_name_init_py"
+      },
+      "render_digest": "405d2eeca663e43cd6e7731547c60679a511ca1362f4dcaef846c4bb02d9b358",
+      "revision": 0,
+      "source": "/tmp/eventic-gate-FMgCga/eventic-real-work-2/src-v0.5.0",
+      "source_digest": "aaf75ddafa336cd0892f177adf0ca28303cf818582127501df864456ed5ed318",
+      "templateer_digest": "286c87491394aab4eca7f82e66bf4560ceee464eea82ed763dd246b51bb8c881",
+      "templateer_version": "0.6.0"
+    }
+  },
+  "manifest_digest": "1573d8e01b25e55ef3daed97643d07638e107ba87b374bca64724ae56aeb647c",
+  "omissions": [
+    "tests/test_eventic.py"
+  ],
+  "owners": {
+    ".devman/project.toml": "devman_project_toml",
+    ".gitignore": "static:static/dot-gitignore",
+    ".repoman/project.toml": "repoman_project_toml",
+    "AGENTS.md": "static:static/AGENTS.md",
+    "CLAUDE.md": "symlink:AGENTS.md",
+    "README.md": "readme_md",
+    "copyroom.project.yml": "copyroom_project_yml",
+    "devenv.nix": "devenv_nix",
+    "devenv.yaml": "devenv_yaml",
+    "pyproject.toml": "pyproject_toml",
+    "src/eventic/__init__.py": "src_package_name_init_py"
+  },
+  "project_id": "ee25717485934013928321b94ead5436",
+  "render_digest": "405d2eeca663e43cd6e7731547c60679a511ca1362f4dcaef846c4bb02d9b358",
+  "revision": 0,
+  "schema": 2,
+  "source": "/tmp/eventic-gate-FMgCga/eventic-real-work-2/src-v0.5.0",
+  "source_digest": "aaf75ddafa336cd0892f177adf0ca28303cf818582127501df864456ed5ed318",
+  "templateer_digest": "286c87491394aab4eca7f82e66bf4560ceee464eea82ed763dd246b51bb8c881",
+  "templateer_version": "0.6.0"
+}
