@@ -52,8 +52,8 @@ symlink to it, so every agent tool reads the same source.
   `copyroom update --apply PATH`.
 - **One RepoMan import only:** if the central Devman overlay already imports the RepoMan
   module, do not also declare the `repoman` input in `devenv.yaml`. devenv fails with
-  "option repoman.enable is already declared". The overlay should import only the Devman
-  link module.
+  "option repoman.enable is already declared". The central overlay imports the
+  machine-installed module at `/run/current-system/sw/share/repoman/module/devenv.nix`.
 
 ## Agent-files convention
 

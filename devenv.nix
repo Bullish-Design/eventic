@@ -10,7 +10,6 @@
 { pkgs, ... }:
 
 {
-  repoman.enable = true;
 
   # Python toolchain. The venv hosts the app and its `test` extra (pytest,
   # ruff, basedpyright). Run `uv sync --extra test` once to fill it.

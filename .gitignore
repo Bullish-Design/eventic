@@ -54,8 +54,3 @@ dbos-config.yaml
 !CLAUDE.md
 .agents
 .claude
-
-# The machine-local devenv input overlay. devenv.yaml is committed in its portable
-# FLEET shape (published tags); this file points the same inputs at THIS machine's
-# working trees.
-devenv.local.yaml
