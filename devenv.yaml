@@ -17,12 +17,3 @@ inputs:
   # nixpkgs rolling currently defaults to (3.14 as of this writing).
   nixpkgs-python:
     url: github:cachix/nixpkgs-python
-
-  # Testee module: declares `testee.checks`. `devenv.lock` pins its revision.
-  # Move the pin with `devenv update testee`, then commit `devenv.lock`.
-  testee:
-    url: "git+https://github.com/Bullish-Design/testee?ref=refs/tags/v0.6.1"
-    flake: false
-
-imports:
-  - testee/nix/testee.nix
