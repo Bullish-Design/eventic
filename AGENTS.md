@@ -30,7 +30,7 @@ symlink to it, so every agent tool reads the same source.
   - `testee doctor` — inspect the host and the project setup.
 - **Testee has no fix command.** Run the formatter directly:
   `devenv shell -- ruff format src tests`. Then rerun `testee verify`.
-- **Checks are Nix data** in `devenv.nix` (`testee.checks`). To add or change a check, edit
+- **Checks are Nix data** in `nix/testee.nix` (`testee.checks`). To add or change a check, edit
   that file. Do not add a separate Testee config file or a `[tool.testee]` table.
   Keep `devenv.lock` and `uv.lock` in Git. A stale `devenv.lock` gives `lock_stale`. A stale
   `uv.lock` gives `prepare_failed`.
@@ -38,7 +38,7 @@ symlink to it, so every agent tool reads the same source.
 ## Where things live
 
 - `src/` — the Python package; `tests/` — its tests.
-- `devenv.nix` / `devenv.yaml` — the shell, Testee checks, and `eventic:*` tasks.
+- `devenv.nix` / `devenv.yaml` — the shell and the `eventic:*` tasks. `nix/testee.nix` — the Testee checks.
 - `pyproject.toml` — package metadata and the `test`, `migrate`, and `postgres` extras.
   The strict `basedpyright` scope is `src/eventic`.
 - `.repoman/project.toml` — the lifecycle manager roster; `.agents/` and `.claude/`
