@@ -39,6 +39,9 @@ in
           "${pkgs.bash}/bin/bash" "-c"
           ''uv run --no-sync pytest -W error --junitxml="$TESTEE_RUN_DIR/pytest.junit.xml"''
         ];
+        # The two four-way property tests take about 90 s each. The full suite
+        # is over the 300 s default, so the check gets 900 s.
+        timeout_s = 900;
         profiles = [ "full" ];
         structured = { parser = "junit-xml"; file = "pytest.junit.xml"; };
       };
