@@ -1,4 +1,0 @@
-schema = 1
-project = "eventic"
-groups = ["base"]
-policy = "stable"
