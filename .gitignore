@@ -54,3 +54,10 @@ dbos-config.yaml
 !CLAUDE.md
 .agents
 .claude
+
+# Plane links (devman, linkman): symlinks into the central overlay, never tracked.
+# Write the names with no trailing slash: a trailing slash matches only a real
+# directory, not a symlink.
+.devman
+.envrc
+.loci
